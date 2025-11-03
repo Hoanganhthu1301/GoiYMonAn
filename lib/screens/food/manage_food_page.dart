@@ -92,7 +92,7 @@ class _ManageFoodPageState extends State<ManageFoodPage> {
                       data['imageUrl'] ?? data['image_url'] ?? '',                      width: 60,
                       height: 60,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.image),
+                      errorBuilder: (_, _, _) => const Icon(Icons.image),
                     ),
                   ),
                   title: Text(

@@ -1,7 +1,3 @@
-// ProfileScreen — light (white) theme version
-// Replaces the dark colors with light backgrounds and dark text.
-// Paste over your existing lib/screens/profile/profile_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,9 +9,9 @@ import '../food/food_detail_screen.dart';
 import '../account/login_screen.dart';
 import 'edit_profile_screen.dart';
 import '../food/edit_food_page.dart';
-
 import '../../services/follow_service.dart';
 import '../../services/fcm_token_service.dart';
+import '../chat/chat_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -50,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 1, vsync: this); // only grid tab
+    _tabController = TabController(length: 1, vsync: this);
     _refreshAll();
   }
 
@@ -155,16 +151,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       await FirebaseFirestore.instance.collection('foods').doc(foodId).delete();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Đã xóa món ăn')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Đã xóa món ăn')),
+      );
       await _loadPosts();
       await _loadStats();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi khi xóa: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi khi xóa: $e')));
     }
   }
 
@@ -177,9 +172,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Đã đăng xuất')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Đã đăng xuất')));
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (c) => const LoginScreen()),
       (route) => false,
@@ -189,7 +183,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final bool isCurrentUser = currentUserId == widget.userId;
-    // Light theme: white background and dark text
+
     const background = Colors.white;
     const cardBg = Color(0xFFF6F6F6);
     const borderColor = Color(0xFFE6E6E6);
@@ -221,7 +215,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // Header
             if (_loadingUser)
               const Padding(
                 padding: EdgeInsets.all(24),
@@ -247,15 +240,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 primaryText,
                 secondaryText,
               ),
-
             Divider(color: borderColor, height: 1),
-
-            // TabBar with only one tab (grid) and the grid view
             Container(
               color: background,
               child: Column(
                 children: [
-                  // Small divider row instead of dark TabBar styling
                   TabBar(
                     controller: _tabController,
                     indicatorColor: Colors.blue,
@@ -264,113 +253,115 @@ class _ProfileScreenState extends State<ProfileScreen>
                     tabs: const [Tab(icon: Icon(Icons.grid_on, size: 20))],
                   ),
                   SizedBox(
-                    height: 460, // adjust as needed
+                    height: 460,
                     child: TabBarView(
                       controller: _tabController,
                       children: [
-                        // Only grid tab remains
                         _loadingPosts
                             ? const Center(child: CircularProgressIndicator())
                             : _posts.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'Chưa có bài viết nào.',
-                                  style: TextStyle(color: secondaryText),
-                                ),
-                              )
-                            : GridView.builder(
-                                padding: const EdgeInsets.all(2),
-                                itemCount: _posts.length,
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                ? const Center(
+                                    child: Text(
+                                      'Chưa có bài viết nào.',
+                                      style: TextStyle(color: secondaryText),
+                                    ),
+                                  )
+                                : GridView.builder(
+                                    padding: const EdgeInsets.all(2),
+                                    itemCount: _posts.length,
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 3,
                                       crossAxisSpacing: 2,
                                       mainAxisSpacing: 2,
                                     ),
-                                itemBuilder: (context, index) {
-                                  final post = _posts[index];
-                                  final data =
-                                      post.data() as Map<String, dynamic>;
-                                  final imageUrl =
-                                      (data['image_url'] ?? '') as String;
-                                  final foodId = post.id;
-                                  final isOwner =
-                                      currentUserId == data['authorId'];
+                                    itemBuilder: (context, index) {
+                                      final post = _posts[index];
+                                      final data =
+                                          post.data() as Map<String, dynamic>;
+                                      final imageUrl =
+                                          (data['image_url'] ?? '') as String;
+                                      final foodId = post.id;
+                                      final isOwner =
+                                          currentUserId == data['authorId'];
 
-                                  return GestureDetector(
-                                    onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              FoodDetailScreen(foodId: foodId),
-                                        ),
-                                      );
-                                    },
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        imageUrl.isNotEmpty
-                                            ? Image.network(
-                                                imageUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (c, e, s) =>
-                                                    Container(
+                                      return GestureDetector(
+                                        onTap: () async {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => FoodDetailScreen(
+                                                  foodId: foodId),
+                                            ),
+                                          );
+                                        },
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            imageUrl.isNotEmpty
+                                                ? Image.network(
+                                                    imageUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (c, e, s) =>
+                                                        Container(
                                                       color:
                                                           Colors.grey.shade200,
                                                     ),
-                                              )
-                                            : Container(
-                                                color: Colors.grey.shade200,
-                                              ),
-                                        if (isOwner)
-                                          Positioned(
-                                            top: 4,
-                                            right: 4,
-                                            child: PopupMenuButton<String>(
-                                              color: Colors.white,
-                                              elevation: 2,
-                                              onSelected: (value) async {
-                                                if (value == 'edit') {
-                                                  await Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          EditFoodPage(
+                                                  )
+                                                : Container(
+                                                    color: Colors.grey.shade200,
+                                                  ),
+                                            if (isOwner)
+                                              Positioned(
+                                                top: 4,
+                                                right: 4,
+                                                child:
+                                                    PopupMenuButton<String>(
+                                                  color: Colors.white,
+                                                  elevation: 2,
+                                                  onSelected: (value) async {
+                                                    if (value == 'edit') {
+                                                      await Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (_) =>
+                                                              EditFoodPage(
                                                             foodId: foodId,
                                                             data: data,
                                                           ),
+                                                        ),
+                                                      );
+                                                      if (mounted) {
+                                                        await _loadPosts();
+                                                      }
+                                                    } else if (value ==
+                                                        'delete') {
+                                                      await _deleteFood(
+                                                          foodId);
+                                                    }
+                                                  },
+                                                  itemBuilder: (ctx) => const [
+                                                    PopupMenuItem(
+                                                      value: 'edit',
+                                                      child: Text('✏️ Sửa'),
                                                     ),
-                                                  );
-                                                  if (mounted) {
-                                                    await _loadPosts();
-                                                  }
-                                                } else if (value == 'delete') {
-                                                  await _deleteFood(foodId);
-                                                }
-                                              },
-                                              itemBuilder: (ctx) => const [
-                                                PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Text('✏️ Sửa'),
-                                                ),
-                                                PopupMenuItem(
-                                                  value: 'delete',
-                                                  child: Text(
-                                                    '🗑️ Xóa',
-                                                    style: TextStyle(
-                                                      color: Colors.red,
+                                                    PopupMenuItem(
+                                                      value: 'delete',
+                                                      child: Text(
+                                                        '🗑️ Xóa',
+                                                        style: TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
                                                     ),
-                                                  ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
                       ],
                     ),
                   ),
@@ -394,10 +385,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   ) {
     final photoURL = (userData['photoURL'] ?? defaultAvatarUrl) as String;
     final displayName = (userData['displayName'] ?? 'Tên người dùng') as String;
-    final username = userData['username'] != null
-        ? '@${userData['username']}'
-        : '';
+    final username =
+        userData['username'] != null ? '@${userData['username']}' : '';
     final bio = (userData['bio'] ?? '').toString().trim();
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
@@ -405,11 +396,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row: avatar + stats
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar (badge removed)
               SizedBox(
                 width: 92,
                 child: CircleAvatar(
@@ -418,41 +407,90 @@ class _ProfileScreenState extends State<ProfileScreen>
                   backgroundColor: Colors.grey.shade200,
                 ),
               ),
-
               const SizedBox(width: 16),
-
-              // Stats columns (number above label)
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _statColumn(
-                      _loadingStats ? null : _postsCount,
-                      'bài viết',
-                      primaryText,
-                      secondaryText,
-                    ),
+                        _loadingStats ? null : _postsCount,
+                        'bài viết',
+                        primaryText,
+                        secondaryText),
                     _statColumn(
-                      _loadingStats ? null : _followersCount,
-                      'người theo dõi',
-                      primaryText,
-                      secondaryText,
-                    ),
+                        _loadingStats ? null : _followersCount,
+                        'người theo dõi',
+                        primaryText,
+                        secondaryText),
                     _statColumn(
-                      _loadingStats ? null : _followingCount,
-                      'đang theo dõi',
-                      primaryText,
-                      secondaryText,
-                    ),
+                        _loadingStats ? null : _followingCount,
+                        'đang theo dõi',
+                        primaryText,
+                        secondaryText),
                   ],
                 ),
               ),
             ],
           ),
-
+          const SizedBox(height: 20),
+          if (!isCurrentUser)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  icon: Icon(
+                      _isFollowing ? Icons.check : Icons.person_add),
+                  label: Text(
+                      _isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
+                  onPressed: currentUserId == null
+                      ? null
+                      : () async {
+                          try {
+                            if (_isFollowing) {
+                              await _followSvc.unfollow(widget.userId);
+                            } else {
+                              await _followSvc.follow(widget.userId);
+                            }
+                            await _loadStats();
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Lỗi: $e')),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isFollowing
+                        ? Colors.grey.shade300
+                        : Colors.orange,
+                    foregroundColor:
+                        _isFollowing ? Colors.black87 : Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text("Nhắn tin"),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          receiverId: widget.userId,
+                          receiverName:
+                              userData['displayName'] ?? 'Người dùng',
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade600,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 12),
-
-          // Display name & username & optional emoji (dark text)
           Text(
             displayName,
             style: TextStyle(
@@ -465,16 +503,15 @@ class _ProfileScreenState extends State<ProfileScreen>
           Row(
             children: [
               if (username.isNotEmpty)
-                Text(
-                  username,
-                  style: TextStyle(color: secondaryText, fontSize: 14),
-                ),
+                Text(username,
+                    style:
+                        TextStyle(color: secondaryText, fontSize: 14)),
               const SizedBox(width: 8),
               if (userData['emoji'] != null)
-                Text(userData['emoji'], style: const TextStyle(fontSize: 14)),
+                Text(userData['emoji'],
+                    style: const TextStyle(fontSize: 14)),
             ],
           ),
-
           const SizedBox(height: 14),
           if (bio.isNotEmpty)
             Padding(
@@ -488,8 +525,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
             ),
-
-          // Buttons (Edit / Share) — light style
           Row(
             children: [
               Expanded(
@@ -519,7 +554,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: Text(
                     isCurrentUser
                         ? 'Chỉnh sửa'
-                        : (_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
+                        : (_isFollowing
+                            ? 'Đang theo dõi'
+                            : 'Theo dõi'),
                   ),
                 ),
               ),
@@ -544,13 +581,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: const Text('Chia sẻ trang cá nhân'),
                 ),
               ),
-              // rightmost compact icon removed per request
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Optional bio (light text)
         ],
       ),
     );

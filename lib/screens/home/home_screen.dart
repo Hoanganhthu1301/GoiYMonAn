@@ -6,11 +6,13 @@ import '../../services/like_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/notifications_button.dart';
 import '../../core/push/push_service_min.dart';
-import '../account/user_management_screen.dart';
 import '../food/add_food_page.dart';
 import '../food/food_detail_screen.dart';
 import '../food/saved_foods_page.dart';
+import '../chat/all_message.dart';
+import '../food/filtered_foods_screen.dart';
 import 'package:doan/screens/menu/daily_menu_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -85,6 +87,22 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         });
   }
+Stream<int> unreadMessagesCount() {
+  final currentUser = FirebaseAuth.instance.currentUser!;
+  return FirebaseFirestore.instance
+      .collection('messages')
+      .where('participants', arrayContains: currentUser.uid)
+      .snapshots()
+      .map((snapshot) {
+    int count = 0;
+    for (var doc in snapshot.docs) {
+      final readBy = List<String>.from(doc.data()['readBy'] ?? []);
+      if (!readBy.contains(currentUser.uid)) count++;
+    }
+    return count;
+  });
+}
+
 
   Future<void> _fetchDietCategories() async {
     try {
@@ -140,9 +158,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
 
     _totalPages = (filtered.length / _pageSize).ceil();
-    if (_currentPage > _totalPages && _totalPages > 0)
+
+    if (_currentPage > _totalPages && _totalPages > 0) {
       _currentPage = _totalPages;
-    if (_totalPages == 0) _currentPage = 1;
+    }
+
+    if (_totalPages == 0) {
+      _currentPage = 1;
+    }
 
     final startIndex = (_currentPage - 1) * _pageSize;
     final endIndex = (_currentPage * _pageSize < filtered.length)
@@ -162,27 +185,60 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Widget? leadingWidget = _isAdmin
-        ? IconButton(
-            icon: const Icon(Icons.group, color: Colors.white),
-            tooltip: 'Quản lý người dùng',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UserManagementScreen()),
-              );
-            },
-          )
-        : null;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Trang chủ'),
         backgroundColor: Colors.green,
         centerTitle: true,
-        leading: leadingWidget,
-        actions: const [NotificationsButton()],
-      ),
+        // Thay thế phần StreamBuilder hiện tại trong AppBar actions:
+        actions: [
+        if (!_isAdmin)
+            // Thêm StreamBuilder badge tin nhắn
+        StreamBuilder<int>(
+          stream: unreadMessagesCount(),
+          builder: (context, snapshot) {
+            final unread = snapshot.data ?? 0;
+            return Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.message),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AllMessagesScreen()),
+                    );
+                  },
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      child: Text(
+                        '$unread',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+            const NotificationsButton(),
+          ],
+),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -235,40 +291,43 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
                   SizedBox(
                     height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _buildFoodCategory(
-                          'Món khai vị',
-                          Icons.emoji_food_beverage,
-                          Colors.green,
-                        ),
-                        _buildFoodCategory(
-                          'Món chính',
-                          Icons.restaurant,
-                          Colors.red,
-                        ),
-                        _buildFoodCategory(
-                          'Món phụ',
-                          Icons.rice_bowl,
-                          Colors.orange,
-                        ),
-                        _buildFoodCategory(
-                          'Ăn vặt',
-                          Icons.fastfood,
-                          Colors.purple,
-                        ),
-                        _buildFoodCategory(
-                          'Tráng miệng',
-                          Icons.icecream,
-                          Colors.pink,
-                        ),
-                        _buildFoodCategory(
-                          'Nước',
-                          Icons.local_drink,
-                          Colors.blue,
-                        ),
-                      ],
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                        .collection('categories')
+                        .where('type', isEqualTo: 'theo_loai_mon_an')
+                        .orderBy('createdAt', descending: false)
+                        .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+                        final categories = snapshot.data!.docs;
+                        if (categories.isEmpty) return const Center(child: Text('Chưa có danh mục món ăn nào.'));
+
+                        return ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final cat = categories[index].data() as Map<String, dynamic>;
+                            
+                            final colorInt = cat['color'] ?? 0xFF4CAF50;
+                            final color = Color.fromARGB(
+                              (colorInt >> 24) & 0xFF,
+                              (colorInt >> 16) & 0xFF,
+                              (colorInt >> 8) & 0xFF,
+                              colorInt & 0xFF,
+                            );
+
+                            final iconCode = cat['icon'] ?? Icons.fastfood.codePoint;
+                            final icon = IconData(iconCode, fontFamily: 'MaterialIcons');
+
+                            return _buildFoodCategory(
+                              cat['name'] ?? 'Danh mục',
+                              icon,
+                              color,
+                            );
+                          },
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -301,18 +360,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               builder: (_) => const SavedFoodsPage(),
                             ),
                           ),
-                        ),
-                        _buildFeatureCard(
-                          'Nguyên liệu',
-                          Icons.shopping_basket,
-                          Colors.green,
-                          () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Chức năng đang cập nhật...'),
-                              ),
-                            );
-                          },
                         ),
                         _buildFeatureCard(
                           'Thêm món',
@@ -501,11 +548,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          selectedCategory = isSelected ? '' : categoryName;
-          _currentPage = 1;
-          _updatePageData();
-        });
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FilteredFoodsScreen(categoryName: categoryName),
+          ),
+  );
       },
       child: Container(
         width: 80,
@@ -533,4 +581,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
+}  

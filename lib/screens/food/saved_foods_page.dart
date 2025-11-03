@@ -35,7 +35,7 @@ class SavedFoodsPage extends StatelessWidget {
           }
           return ListView.separated(
             itemCount: ids.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final foodId = ids[i];
               return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(

@@ -6,7 +6,6 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'register_screen.dart';
 import '../dashboard_screen.dart';
-// import 'user_management_screen.dart'; // Bắt buộc cho chuyển hướng Admin
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -44,11 +43,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // 3. Chuyển hướng dựa trên vai trò
     Widget nextScreen = const DashboardScreen();
     if (role == 'admin') {
-      // Chuyển hướng Admin đến màn hình quản lý (hoặc Dashboard tùy ý)
-      // Hiện tại không có UserManagementScreen, giữ Dashboard là an toàn
+      // Giữ Dashboard làm màn hình mặc định sau khi đăng nhập (thay vì UserManagementScreen)
       nextScreen = const DashboardScreen(); 
-      // Nếu bạn muốn dùng UserManagementScreen, hãy thay thế dòng trên
-      // nextScreen = const UserManagementScreen();
     }
     
     // 4. Chuyển hướng cuối cùng
@@ -87,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      debugPrint('Login error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (!mounted) return;
@@ -139,117 +136,146 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Thay thế _showForgotPasswordDialog bằng phiên bản an toàn
   Future<void> _showForgotPasswordDialog() async {
-    final emailResetController = TextEditingController(
+    final emailController = TextEditingController(
       text: _emailController.text.trim(),
     );
     final formKeyReset = GlobalKey<FormState>();
-    bool sending = false;
 
-    // showDialog trả về khi dialog bị đóng
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
+      builder: (dialogCtx) {
+        bool sending = false;
+        bool success = false;
+        String? errorMsg;
+
         return StatefulBuilder(
-          builder: (ctx, setState) {
+          builder: (dialogCtx, setState) {
             return AlertDialog(
-              title: const Text('Đặt lại mật khẩu'),
-              content: Form(
-                key: formKeyReset,
+              title: success
+                  ? const Text('Đã gửi')
+                  : const Text('Đặt lại mật khẩu'),
+              content: SizedBox(
+                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Nhập email liên kết với tài khoản của bạn. Chúng tôi sẽ gửi hướng dẫn để đặt lại mật khẩu.',
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: emailResetController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'email@example.com',
+                    if (!success) ...[
+                      const Text('Nhập email liên kết với tài khoản của bạn.'),
+                      const SizedBox(height: 12),
+                      Form(
+                        key: formKeyReset,
+                        child: TextFormField(
+                          controller: emailController,
+                          decoration: const InputDecoration(labelText: 'Email'),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Nhập email';
+                            }
+                            final re = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                            if (!re.hasMatch(v.trim())) {
+                              return 'Email không hợp lệ';
+                            }
+                            return null;
+                          },
+                        ),
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Nhập email';
-                        final email = v.trim();
-                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                        if (!emailRegex.hasMatch(email)) {
-                          return 'Email không hợp lệ';
-                        }
-                        return null;
-                      },
-                    ),
+                      if (errorMsg != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMsg!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ],
+                    ] else ...[
+                      const Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.green,
+                        size: 56,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Chúng tôi đã gửi hướng dẫn. Vui lòng kiểm tra hộp thư.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: sending ? null : () => Navigator.of(ctx).pop(),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: sending
-                      ? null
-                      : () async {
-                          if (!(formKeyReset.currentState?.validate() ??
-                              false)) {
-                            return;
-                          }
-
-                          setState(() => sending = true);
-                          final email = emailResetController.text.trim();
-
-                          // Gọi async gửi mail (trong AuthService)
-                          final result = await _authService.sendPasswordReset(
-                            email,
-                          );
-
-                          // Sau async: cập nhật UI dialog (spinner) và đóng dialog
-                          if (mounted) {
-                            setState(() => sending = false);
-                            Navigator.of(ctx).pop(); // đóng dialog
-                          } else {
-                            // nếu state đã unmounted, chỉ đóng dialog nếu possible
+                if (!success)
+                  TextButton(
+                    onPressed: sending
+                        ? null
+                        : () {
                             try {
-                              Navigator.of(ctx).pop();
+                              Navigator.of(dialogCtx).pop();
                             } catch (_) {}
-                          }
+                          },
+                    child: const Text('Hủy'),
+                  ),
+                if (!success)
+                  ElevatedButton(
+                    onPressed: sending
+                        ? null
+                        : () async {
+                              if (!(formKeyReset.currentState?.validate() ??
+                                  false)) {
+                                return;
+                              }
+                              setState(() => sending = true);
+                              final email = emailController.text.trim();
 
-                          // SAU KHI ĐÓ: KHÔNG DÙNG 'ctx' nữa, dùng 'mounted' để an toàn
-                          if (!mounted) {
-                            emailResetController.dispose();
-                            return;
-                          }
+                              String? result;
+                              try {
+                                result = await _authService.sendPasswordReset(
+                                  email,
+                                );
+                              } catch (e, st) {
+                                debugPrint('sendPasswordReset threw: $e\n$st');
+                                result = e.toString();
+                              }
 
-                          if (result == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Đã gửi email hướng dẫn đặt lại mật khẩu tới $email',
-                                ),
+                              // After async: update dialog UI (we are still inside dialog builder's setState)
+                              if (!mounted) {
+                                return;
+                              }
+
+                              setState(() {
+                                sending = false;
+                                if (result == null) {
+                                  success = true;
+                                  errorMsg = null;
+                                  // copy into main login email field so user still sees it
+                                  _emailController.text = email;
+                                } else {
+                                  errorMsg = 'Lỗi: $result';
+                                }
+                              });
+                            },
+                    child: sending
+                        ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Lỗi: $result')),
-                            );
-                          }
-
-                          emailResetController.dispose();
-                        },
-                  child: sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Gửi'),
-                ),
+                            )
+                        : const Text('Gửi'),
+                  ),
+                if (success)
+                  TextButton(
+                    onPressed: () {
+                      try {
+                        Navigator.of(dialogCtx).pop();
+                      } catch (_) {}
+                    },
+                    child: const Text('Đóng'),
+                  ),
               ],
             );
           },
@@ -257,9 +283,9 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     );
 
-    // dialog đã đóng — dispose controller an toàn (không cần kiểm tra mounted)
+    // Dispose controller after dialog closed
     try {
-      emailResetController.dispose();
+      emailController.dispose();
     } catch (_) {}
   }
 
@@ -302,7 +328,8 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               // Nút Quên mật khẩu
-              Center(
+              Align(
+                alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: _showForgotPasswordDialog,
                   child: const Text('Quên mật khẩu?'),

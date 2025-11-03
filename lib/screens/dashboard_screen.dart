@@ -9,6 +9,7 @@ import 'profile/profile_screen.dart';
 // import 'dashboard_screen.dart';
 
 import '../category/manage_category_page.dart';
+import 'account/user_management_screen.dart';
 // import 'package:firebase_core/firebase_core.dart';
 // import 'dashboard_screen.dart';
 
@@ -49,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _pages = [
             const HomeScreen(),
             const ManageFoodPage(),
+            const UserManagementScreen(),
             const ManageCategoryPage(),
             ProfileScreen(userId: currentUserId),
           ];
@@ -95,8 +97,12 @@ items: userRole == 'admin'
           label: 'Trang chủ',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.fastfood),
-          label: 'Món ăn',
+          icon: Icon(Icons.article),
+          label: 'Bài viết',
+        ),
+                BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Người dùng',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.category),
