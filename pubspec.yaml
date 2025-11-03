@@ -33,6 +33,7 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.2.15
   timeago: ^3.7.1
+  google_sign_in: ^6.2.1
   
 
 

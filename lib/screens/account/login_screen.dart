@@ -1,9 +1,12 @@
+// lib/screens/account/login_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'register_screen.dart';
 import '../dashboard_screen.dart';
+// import 'user_management_screen.dart'; // Bắt buộc cho chuyển hướng Admin
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,31 +29,55 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // Hàm xử lý chung cho mọi loại Đăng nhập (Email/GitHub/Ẩn danh)
+  Future<void> _handleSuccessfulLogin(User user) async {
+    // 1. Đảm bảo users/{uid} tồn tại và cập nhật profile
+    await ProfileService().ensureUserDoc(user);
+    
+    if (!mounted) return;
+
+    // 2. Lấy vai trò 
+    final role = await _authService.getCurrentUserRole();
+
+    if (!mounted) return;
+
+    // 3. Chuyển hướng dựa trên vai trò
+    Widget nextScreen = const DashboardScreen();
+    if (role == 'admin') {
+      // Chuyển hướng Admin đến màn hình quản lý (hoặc Dashboard tùy ý)
+      // Hiện tại không có UserManagementScreen, giữ Dashboard là an toàn
+      nextScreen = const DashboardScreen(); 
+      // Nếu bạn muốn dùng UserManagementScreen, hãy thay thế dòng trên
+      // nextScreen = const UserManagementScreen();
+    }
+    
+    // 4. Chuyển hướng cuối cùng
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => nextScreen),
+    );
+  }
+
+
+  // Logic Đăng nhập bằng Email/Password
   Future<void> _login() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
     setState(() => _isLoading = true);
+    
     try {
       final User? user = await _authService.login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (user != null) {
-        // Đảm bảo users/{uid} tồn tại để dùng cho Profile
-        await ProfileService().ensureUserDoc(user);
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
+        await _handleSuccessfulLogin(user);
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -66,6 +93,49 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+  
+  // Logic Đăng nhập bằng Google
+  Future<void> _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    
+    final User? user = await _authService.signInWithGoogle();
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (user != null) {
+      await _handleSuccessfulLogin(user);
+    }
+  }
+
+
+  // Logic Đăng nhập bằng GitHub
+  Future<void> _loginWithGitHub() async {
+    setState(() => _isLoading = true);
+    
+    final User? user = await _authService.signInWithGitHub();
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (user != null) {
+      await _handleSuccessfulLogin(user);
+    }
+  }
+
+  // Logic Đăng nhập Ẩn danh
+  Future<void> _loginAnonymously() async {
+    setState(() => _isLoading = true);
+    
+    final User? user = await _authService.signInAnonymously();
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (user != null) {
+      await _handleSuccessfulLogin(user);
     }
   }
 
@@ -193,6 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {}
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -204,6 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Trường Email
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email'),
@@ -216,6 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
+              // Trường Mật khẩu
               TextFormField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Mật khẩu'),
@@ -228,6 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 8),
+              // Nút Quên mật khẩu
               Center(
                 child: TextButton(
                   onPressed: _showForgotPasswordDialog,
@@ -236,6 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
 
               const SizedBox(height: 12),
+              // Nút Đăng nhập Email/Pass
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
@@ -245,6 +320,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: const Text('Đăng Nhập'),
                     ),
+              
+              const SizedBox(height: 16),
+              
+              // Nút Đăng nhập Google
+              ElevatedButton.icon(
+                icon: const Icon(Icons.g_mobiledata),
+                label: const Text('Đăng nhập với Google'),
+                onPressed: _loginWithGoogle,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red, // Màu đỏ nổi bật
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+
+              // Nút Đăng nhập bằng GitHub
+              ElevatedButton.icon(
+                icon: const Icon(Icons.code),
+                label: const Text('Đăng nhập với GitHub'),
+                onPressed: _loginWithGitHub,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+              ),
+
+              // Nút Đăng nhập Ẩn danh
+              TextButton(
+                onPressed: _loginAnonymously,
+                child: const Text('Đăng nhập Ẩn danh'),
+              ),
+
+              // Nút Đăng ký
               TextButton(
                 onPressed: () => Navigator.push(
                   context,
