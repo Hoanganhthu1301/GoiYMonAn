@@ -2,9 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-
-// Screens & services (adjust paths to your project)
 import '../food/food_detail_screen.dart';
 import '../account/login_screen.dart';
 import 'edit_profile_screen.dart';
@@ -12,6 +9,7 @@ import '../food/edit_food_page.dart';
 import '../../services/follow_service.dart';
 import '../../services/fcm_token_service.dart';
 import '../chat/chat_screen.dart';
+import '../food/add_food_page.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -201,14 +199,30 @@ class _ProfileScreenState extends State<ProfileScreen>
           style: TextStyle(color: primaryText),
         ),
         actions: [
-          if (isCurrentUser)
-            IconButton(
-              tooltip: 'Đăng xuất',
-              onPressed: _logout,
-              icon: const Icon(Icons.logout, color: Colors.black87),
-            ),
+        if (isCurrentUser) ...[
+          IconButton(
+            tooltip: 'Thêm món ăn',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddFoodPage()),
+              );
+              // Sau khi thêm món ăn xong, load lại danh sách bài viết
+              if (mounted) {
+                await _loadPosts();
+                await _loadStats();
+              }
+            },
+            icon: const Icon(Icons.add_circle_outline, color: Colors.black87),
+          ),
+          IconButton(
+            tooltip: 'Đăng xuất',
+            onPressed: _logout,
+            icon: const Icon(Icons.logout, color: Colors.black87),
+          ),
         ],
-      ),
+      ],
+    ),
       body: RefreshIndicator(
         onRefresh: _refreshAll,
         color: Colors.blue,
@@ -375,73 +389,113 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildProfileHeader(
-    BuildContext context,
-    Map<String, dynamic> userData,
-    bool isCurrentUser,
-    Color cardBg,
-    Color borderColor,
-    Color primaryText,
-    Color secondaryText,
-  ) {
-    final photoURL = (userData['photoURL'] ?? defaultAvatarUrl) as String;
-    final displayName = (userData['displayName'] ?? 'Tên người dùng') as String;
-    final username =
-        userData['username'] != null ? '@${userData['username']}' : '';
-    final bio = (userData['bio'] ?? '').toString().trim();
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  BuildContext context,
+  Map<String, dynamic> userData,
+  bool isCurrentUser,
+  Color cardBg,
+  Color borderColor,
+  Color primaryText,
+  Color secondaryText,
+) {
+  final photoURL = (userData['photoURL'] ?? defaultAvatarUrl) as String;
+  final displayName = (userData['displayName'] ?? 'Tên người dùng') as String;
+  final username =
+      userData['username'] != null ? '@${userData['username']}' : '';
+  final bio = (userData['bio'] ?? '').toString().trim();
+  final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 92,
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundImage: NetworkImage(photoURL),
-                  backgroundColor: Colors.grey.shade200,
-                ),
+  return Container(
+    padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+    color: Colors.white,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1️⃣ Avatar và thống kê bài viết / followers / following
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 92,
+              child: CircleAvatar(
+                radius: 40,
+                backgroundImage: NetworkImage(photoURL),
+                backgroundColor: Colors.grey.shade200,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _statColumn(
-                        _loadingStats ? null : _postsCount,
-                        'bài viết',
-                        primaryText,
-                        secondaryText),
-                    _statColumn(
-                        _loadingStats ? null : _followersCount,
-                        'người theo dõi',
-                        primaryText,
-                        secondaryText),
-                    _statColumn(
-                        _loadingStats ? null : _followingCount,
-                        'đang theo dõi',
-                        primaryText,
-                        secondaryText),
-                  ],
-                ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _statColumn(
+                      _loadingStats ? null : _postsCount,
+                      'bài viết',
+                      primaryText,
+                      secondaryText),
+                  _statColumn(
+                      _loadingStats ? null : _followersCount,
+                      'người theo dõi',
+                      primaryText,
+                      secondaryText),
+                  _statColumn(
+                      _loadingStats ? null : _followingCount,
+                      'đang theo dõi',
+                      primaryText,
+                      secondaryText),
+                ],
               ),
-            ],
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 14),
+
+        // 2️⃣ Tên + username + emoji
+        Text(
+          displayName,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: primaryText,
           ),
-          const SizedBox(height: 20),
-          if (!isCurrentUser)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  icon: Icon(
-                      _isFollowing ? Icons.check : Icons.person_add),
-                  label: Text(
-                      _isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            if (username.isNotEmpty)
+              Text(username,
+                  style: TextStyle(color: secondaryText, fontSize: 14)),
+            const SizedBox(width: 8),
+            if (userData['emoji'] != null)
+              Text(userData['emoji'], style: const TextStyle(fontSize: 14)),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        // 3️⃣ Bio
+        if (bio.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              bio,
+              style: TextStyle(
+                color: secondaryText,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ),
+
+        // 4️⃣ Nút hành động nằm **dưới tên, username, bio**
+        if (!isCurrentUser)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: Icon(_isFollowing ? Icons.check : Icons.person_add),
+                  label: Text(_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
                   onPressed: currentUserId == null
                       ? null
                       : () async {
@@ -460,18 +514,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isFollowing
-                        ? Colors.grey.shade300
-                        : Colors.orange,
+                    backgroundColor:
+                        _isFollowing ? Colors.grey.shade300 : Colors.orange,
                     foregroundColor:
                         _isFollowing ? Colors.black87 : Colors.white,
                   ),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton.icon(
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: ElevatedButton.icon(
                   icon: const Icon(Icons.chat_bubble_outline),
                   label: const Text("Nhắn tin"),
                   onPressed: () {
+                    if (currentUserId == null) return;
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -488,85 +544,26 @@ class _ProfileScreenState extends State<ProfileScreen>
                     foregroundColor: Colors.white,
                   ),
                 ),
-              ],
-            ),
-          const SizedBox(height: 12),
-          Text(
-            displayName,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: primaryText,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              if (username.isNotEmpty)
-                Text(username,
-                    style:
-                        TextStyle(color: secondaryText, fontSize: 14)),
-              const SizedBox(width: 8),
-              if (userData['emoji'] != null)
-                Text(userData['emoji'],
-                    style: const TextStyle(fontSize: 14)),
+              ),
+              const SizedBox(width: 6),
             ],
           ),
-          const SizedBox(height: 14),
-          if (bio.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Text(
-                bio,
-                style: TextStyle(
-                  color: secondaryText,
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
-            ),
+
+        if (isCurrentUser)
           Row(
             children: [
+              // Current user: 2 nút ngang → Chỉnh sửa / Chia sẻ
               Expanded(
                 child: ElevatedButton(
-                  onPressed: isCurrentUser
-                      ? () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  EditProfileScreen(userId: widget.userId),
-                            ),
-                          );
-                          if (mounted) await _loadUser();
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: primaryText,
-                    side: BorderSide(color: borderColor),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    isCurrentUser
-                        ? 'Chỉnh sửa'
-                        : (_isFollowing
-                            ? 'Đang theo dõi'
-                            : 'Theo dõi'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    final url =
-                        'https://yourapp.example.com/user/${widget.userId}';
-                    Fluttertoast.showToast(msg: 'Chia sẻ: $url');
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            EditProfileScreen(userId: widget.userId),
+                      ),
+                    );
+                    if (mounted) await _loadUser();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
@@ -578,16 +575,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                     elevation: 0,
                   ),
-                  child: const Text('Chia sẻ trang cá nhân'),
+                  child: const Text('Chỉnh sửa'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
+
+        const SizedBox(height: 12),
+      ],
+    ),
+  );
+}
 
   Widget _statColumn(
     int? value,

@@ -8,10 +8,13 @@ import 'profile/profile_screen.dart';
 // import 'package:firebase_core/firebase_core.dart';
 // import 'dashboard_screen.dart';
 
-import '../category/manage_category_page.dart';
+import 'category/manage_category_page.dart';
 import 'account/user_management_screen.dart';
 // import 'package:firebase_core/firebase_core.dart';
 // import 'dashboard_screen.dart';
+import 'menu/daily_menu_screen.dart';
+import 'food/saved_foods_page.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -56,7 +59,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ];
         } else {
           // 👉 User chỉ có Trang chủ và Cá nhân
-          _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
+          _pages = [
+            const HomeScreen(),
+            const DailyMenuScreen(),
+            const SavedFoodsPage(),
+            ProfileScreen(userId: currentUserId),
+
+            ];
         }
       });
     } catch (e) {
@@ -116,7 +125,16 @@ items: userRole == 'admin'
     : const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
-          label: 'Trang chủ',
+          label:' Trang chủ',
+
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.auto_awesome),
+          label: 'Gợi ý',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.bookmark),
+          label: 'Đã lưu',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),

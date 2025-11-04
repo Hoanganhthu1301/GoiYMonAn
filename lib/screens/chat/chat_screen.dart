@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../services/message_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -20,7 +21,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
+  final _msgSvc = MessageService(); // ✅ Gọi service dùng chung
 
+  /// Gửi tin nhắn
   Future<void> _sendMessage() async {
     final user = _auth.currentUser!;
     final text = _controller.text.trim();
@@ -39,35 +42,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.clear();
   }
 
- @override
-void initState() {
-  super.initState();
-  // Khi màn hình chat vừa build xong, đánh dấu tất cả tin nhắn từ người kia là đã đọc
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    markMessagesAsRead();
-  });
-}
-
-void markMessagesAsRead() async {
-  final currentUser = FirebaseAuth.instance.currentUser!;
-  
-  // Lấy tất cả tin nhắn từ người kia gửi cho mình, mà mình chưa đọc
-  final query = await FirebaseFirestore.instance
-      .collection('messages')
-      .where('participants', arrayContains: currentUser.uid)
-      .where('senderId', isEqualTo: widget.receiverId)
-      .get();
-
-  for (var doc in query.docs) {
-    final readBy = List<String>.from(doc.data()['readBy'] ?? []);
-    if (!readBy.contains(currentUser.uid)) {
-      await doc.reference.update({
-        'readBy': FieldValue.arrayUnion([currentUser.uid])
-      });
-    }
+  /// ✅ Khi mở Chat, đánh dấu tin nhắn từ người kia là đã đọc
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _msgSvc.markAsRead(widget.receiverId);
+    });
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +61,7 @@ void markMessagesAsRead() async {
       ),
       body: Column(
         children: [
+          // 🔹 Danh sách tin nhắn
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _firestore
@@ -160,6 +143,8 @@ void markMessagesAsRead() async {
               },
             ),
           ),
+
+          // 🔹 Thanh nhập tin nhắn
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -168,8 +153,9 @@ void markMessagesAsRead() async {
                   child: TextField(
                     controller: _controller,
                     decoration: const InputDecoration(
-                        hintText: 'Nhập tin nhắn...',
-                        border: OutlineInputBorder()),
+                      hintText: 'Nhập tin nhắn...',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
                 IconButton(
