@@ -21,33 +21,44 @@ class _CommentSectionState extends State<CommentSection> {
 
   // Store comments as simple Maps to avoid snapshot type conflicts
   List<Map<String, dynamic>> docs = [];
-  bool loading = false;
+  bool loadingInitial = false;
   bool loadingMore = false;
   bool hasMore = true;
-  // Keep lastDoc as DocumentSnapshot for pagination (startAfterDocument)
+
+  // Sending flag tách riêng
+  bool _isSending = false;
+
+  // Pagination
   DocumentSnapshot<Map<String, dynamic>>? lastDoc;
-  String? uid;
+
+  // Realtime
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? realtimeSub;
+  bool _realtimePrimed = false; // bỏ qua emit đầu tiên để tránh trùng initial
+  String? uid;
 
   @override
   void initState() {
     super.initState();
     uid = FirebaseAuth.instance.currentUser?.uid;
-    _loadInitial();
-    _startRealtimeListener();
-    _listController.addListener(_scrollListener);
+    _bootstrap();
 
-    // Set Vietnamese locale for timeago (optional)
+    // Set Vietnamese locale cho timeago (optional)
     try {
       timeago.setLocaleMessages('vi', timeago.ViMessages());
     } catch (_) {}
+    _listController.addListener(_scrollListener);
+  }
+
+  Future<void> _bootstrap() async {
+    await _loadInitial();
+    _startRealtimeListener();
   }
 
   @override
   void didUpdateWidget(covariant CommentSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.foodId != widget.foodId) {
-      _resetAndLoad();
+      _resetAndReload();
     }
   }
 
@@ -70,24 +81,25 @@ class _CommentSectionState extends State<CommentSection> {
     }
   }
 
-  Future<void> _resetAndLoad() async {
-    if (mounted) {
-      setState(() {
-        docs = [];
-        lastDoc = null;
-        hasMore = true;
-      });
-    }
+  Future<void> _resetAndReload() async {
+    await realtimeSub?.cancel();
+    realtimeSub = null;
+    _realtimePrimed = false;
+
+    setState(() {
+      docs = [];
+      lastDoc = null;
+      hasMore = true;
+    });
     await _loadInitial();
+    _startRealtimeListener();
   }
 
-  // Helper: convert QuerySnapshot -> List<Map> safely (handle possible null data)
   List<Map<String, dynamic>> _docsFromQuerySnapshot(
     QuerySnapshot<Map<String, dynamic>> snap,
   ) {
     return snap.docs.map((d) {
-      final data = d
-          .data(); // for QueryDocumentSnapshot this is non-nullable, but handle generically
+      final data = d.data();
       final map = <String, dynamic>{'id': d.id};
       map.addAll(data);
       return map;
@@ -95,8 +107,8 @@ class _CommentSectionState extends State<CommentSection> {
   }
 
   Future<void> _loadInitial() async {
-    if (loading) return;
-    if (mounted) setState(() => loading = true);
+    if (loadingInitial) return;
+    setState(() => loadingInitial = true);
     try {
       final q = _db
           .collection('comments')
@@ -107,17 +119,11 @@ class _CommentSectionState extends State<CommentSection> {
       final snap = await q.get();
       final loaded = _docsFromQuerySnapshot(snap);
 
-      if (mounted) {
-        setState(() {
-          docs = loaded;
-          lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
-          hasMore = snap.docs.length == widget.pageSize;
-        });
-      } else {
+      setState(() {
         docs = loaded;
         lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
         hasMore = snap.docs.length == widget.pageSize;
-      }
+      });
     } catch (e, st) {
       debugPrint('loadInitial comments error: $e\n$st');
       if (mounted) {
@@ -126,13 +132,13 @@ class _CommentSectionState extends State<CommentSection> {
         ).showSnackBar(SnackBar(content: Text('Lỗi khi tải bình luận: $e')));
       }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => loadingInitial = false);
     }
   }
 
   Future<void> _loadMore() async {
     if (loadingMore || !hasMore || lastDoc == null) return;
-    if (mounted) setState(() => loadingMore = true);
+    setState(() => loadingMore = true);
     try {
       final q = _db
           .collection('comments')
@@ -144,17 +150,15 @@ class _CommentSectionState extends State<CommentSection> {
       final snap = await q.get();
       final newMaps = _docsFromQuerySnapshot(snap);
 
-      if (mounted) {
-        setState(() {
-          docs.addAll(newMaps);
-          lastDoc = snap.docs.isNotEmpty ? snap.docs.last : lastDoc;
-          hasMore = newMaps.length == widget.pageSize;
-        });
-      } else {
-        docs.addAll(newMaps);
+      // Dedupe theo id
+      final existingIds = docs.map((e) => e['id'] as String).toSet();
+      final deduped = newMaps.where((m) => !existingIds.contains(m['id']));
+
+      setState(() {
+        docs.addAll(deduped);
         lastDoc = snap.docs.isNotEmpty ? snap.docs.last : lastDoc;
         hasMore = newMaps.length == widget.pageSize;
-      }
+      });
     } catch (e, st) {
       debugPrint('loadMore comments error: $e\n$st');
       if (mounted) {
@@ -169,7 +173,7 @@ class _CommentSectionState extends State<CommentSection> {
 
   Future<void> _postComment() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -181,11 +185,30 @@ class _CommentSectionState extends State<CommentSection> {
       return;
     }
 
-    if (mounted) setState(() => loading = true);
+    setState(() => _isSending = true);
 
     try {
       final authorName = user.displayName ?? user.email ?? 'Người dùng';
-      final ref = await _db.collection('comments').add({
+
+      // Tạo id trước để chèn optimistic-item có cùng id
+      final ref = _db.collection('comments').doc();
+
+      // Optimistic UI: chèn item tạm thời để thấy ngay
+      final pendingItem = {
+        'id': ref.id,
+        'foodId': widget.foodId,
+        'text': text,
+        'authorId': user.uid,
+        'authorName': authorName,
+        'createdAt': Timestamp.now(),
+        '_pending': true,
+      };
+      setState(() {
+        docs.insert(0, pendingItem);
+      });
+
+      // Ghi thật lên Firestore (serverTimestamp)
+      await ref.set({
         'foodId': widget.foodId,
         'text': text,
         'authorId': user.uid,
@@ -193,40 +216,90 @@ class _CommentSectionState extends State<CommentSection> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Read the created doc; data() on DocumentSnapshot can be nullable before the serverTimestamp resolves,
-      // so check for null before adding.
-      final createdSnap = await ref.get();
-      final createdData = createdSnap.data();
-      final createdMap = <String, dynamic>{'id': ref.id};
-      if (createdData != null) createdMap.addAll(createdData);
-
-      if (mounted) {
-        setState(() {
-          docs.insert(0, createdMap);
-        });
-      } else {
-        docs.insert(0, createdMap);
-      }
-
       _controller.clear();
 
+      // Scroll lên đầu
       if (_listController.hasClients) {
         _listController.animateTo(
           0.0,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     } catch (e, st) {
       debugPrint('postComment error: $e\n$st');
       if (mounted) {
+        // Nếu lỗi, loại bỏ optimistic item (nếu còn ở đầu danh sách)
+        docs.removeWhere((d) => d['_pending'] == true);
+        setState(() {});
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Gửi bình luận thất bại: $e')));
       }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  void _startRealtimeListener() {
+    // Hủy listener cũ nếu có
+    realtimeSub?.cancel();
+    _realtimePrimed = false;
+
+    // Nghe top các bình luận theo thời gian giảm dần
+    final q = _db
+        .collection('comments')
+        .where('foodId', isEqualTo: widget.foodId)
+        .orderBy('createdAt', descending: true)
+        .limit(widget.pageSize + 5); // buffer nhỏ
+
+    realtimeSub = q.snapshots().listen(
+      (snap) {
+        // Bỏ qua emit đầu (nó chứa lại các doc đã có từ initial load)
+        if (!_realtimePrimed) {
+          _realtimePrimed = true;
+          return;
+        }
+
+        // Xử lý các thay đổi
+        for (final change in snap.docChanges) {
+          final data = change.doc.data();
+          if (data == null) continue;
+          final id = change.doc.id;
+
+          if (change.type == DocumentChangeType.added) {
+            final idx = docs.indexWhere((d) => d['id'] == id);
+            if (idx >= 0) {
+              // Thay thế optimistic item bằng dữ liệu thật (cập nhật serverTimestamp)
+              setState(() {
+                docs[idx] = {'id': id, ...data};
+              });
+            } else {
+              setState(() {
+                docs.insert(0, {'id': id, ...data});
+              });
+            }
+          } else if (change.type == DocumentChangeType.modified) {
+            final idx = docs.indexWhere((d) => d['id'] == id);
+            if (idx >= 0) {
+              setState(() {
+                docs[idx] = {'id': id, ...data};
+              });
+            }
+          } else if (change.type == DocumentChangeType.removed) {
+            final idx = docs.indexWhere((d) => d['id'] == id);
+            if (idx >= 0) {
+              setState(() {
+                docs.removeAt(idx);
+              });
+            }
+          }
+        }
+      },
+      onError: (e, st) {
+        debugPrint('Realtime listener error: $e\n$st');
+      },
+    );
   }
 
   Future<void> _deleteComment(String docId, String authorId) async {
@@ -267,8 +340,6 @@ class _CommentSectionState extends State<CommentSection> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Đã xóa bình luận')));
-      } else {
-        docs.removeWhere((d) => d['id'] == docId);
       }
     } catch (e, st) {
       debugPrint('deleteComment error: $e\n$st');
@@ -280,56 +351,9 @@ class _CommentSectionState extends State<CommentSection> {
     }
   }
 
-  void _startRealtimeListener() {
-    try {
-      realtimeSub = _db
-          .collection('comments')
-          .where('foodId', isEqualTo: widget.foodId)
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .listen((snap) {
-            for (var change in snap.docChanges) {
-              final doc = change.doc;
-              final data = doc.data();
-              final map = <String, dynamic>{'id': doc.id};
-              if (data != null) map.addAll(data);
-
-              switch (change.type) {
-                case DocumentChangeType.added:
-                  if (!docs.any((d) => d['id'] == map['id'])) {
-                    if (mounted) {
-                      setState(() => docs.insert(0, map));
-                    } else {
-                      docs.insert(0, map);
-                    }
-                  }
-                  break;
-                case DocumentChangeType.removed:
-                  if (mounted) {
-                    setState(() => docs.removeWhere((d) => d['id'] == doc.id));
-                  } else {
-                    docs.removeWhere((d) => d['id'] == doc.id);
-                  }
-                  break;
-                case DocumentChangeType.modified:
-                  final idx = docs.indexWhere((d) => d['id'] == map['id']);
-                  if (idx >= 0) {
-                    if (mounted) {
-                      setState(() => docs[idx] = map);
-                    } else {
-                      docs[idx] = map;
-                    }
-                  }
-                  break;
-              }
-            }
-          });
-    } catch (e, st) {
-      debugPrint('Realtime listener error: $e\n$st');
-    }
+  Future<void> _refresh() async {
+    await _resetAndReload();
   }
-
-  Future<void> _refresh() async => _resetAndLoad();
 
   Widget _buildCommentItemFromMap(Map<String, dynamic> doc) {
     final text = doc['text'] ?? '';
@@ -392,7 +416,7 @@ class _CommentSectionState extends State<CommentSection> {
       children: [
         Container(
           constraints: const BoxConstraints(minHeight: 80, maxHeight: 360),
-          child: loading && docs.isEmpty
+          child: loadingInitial && docs.isEmpty
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _refresh,
@@ -405,6 +429,7 @@ class _CommentSectionState extends State<CommentSection> {
                       if (index < docs.length) {
                         return _buildCommentItemFromMap(docs[index]);
                       } else {
+                        // Footer "xem thêm"
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6.0),
                           child: Center(
@@ -440,10 +465,11 @@ class _CommentSectionState extends State<CommentSection> {
                       vertical: 10,
                     ),
                   ),
+                  onSubmitted: (_) => _postComment(),
                 ),
               ),
               const SizedBox(width: 8),
-              loading
+              _isSending
                   ? const SizedBox(
                       width: 36,
                       height: 36,

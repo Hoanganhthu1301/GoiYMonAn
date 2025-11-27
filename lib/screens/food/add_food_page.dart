@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
+import 'package:doan/services/ingredient_keyword_service.dart';
+import 'package:doan/services/keyword_generator_service.dart';
 
 class AddFoodPage extends StatefulWidget {
   const AddFoodPage({super.key});
@@ -21,7 +23,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
   final _instructionsController = TextEditingController();
 
   String? _selectedCategoryId; // loại hình món ăn
-  String? _selectedDietId;     // chế độ ăn
+  String? _selectedDietId; // chế độ ăn
 
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _diets = [];
@@ -38,14 +40,20 @@ class _AddFoodPageState extends State<AddFoodPage> {
   }
 
   Future<void> _loadCategories() async {
-    final snapshot = await FirebaseFirestore.instance.collection('categories').get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('categories')
+        .get();
 
     // Tách danh mục ra 2 nhóm
-    final all = snapshot.docs.map((doc) => {
-          'id': doc.id,
-          'name': doc['name'],
-          'type': doc['type'], // "loai_hinh" hoặc "che_do_an"
-        }).toList();
+    final all = snapshot.docs
+        .map(
+          (doc) => {
+            'id': doc.id,
+            'name': doc['name'],
+            'type': doc['type'], // "loai_hinh" hoặc "che_do_an"
+          },
+        )
+        .toList();
 
     setState(() {
       _categories = all.where((c) => c['type'] == 'theo_loai_mon_an').toList();
@@ -64,12 +72,16 @@ class _AddFoodPageState extends State<AddFoodPage> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
     if (pickedFile != null) setState(() => _imageFile = File(pickedFile.path));
   }
 
   Future<void> _pickVideo() async {
-    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickVideo(
+      source: ImageSource.gallery,
+    );
     if (pickedFile != null) {
       setState(() => _videoFile = File(pickedFile.path));
       _videoController?.dispose();
@@ -83,15 +95,16 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   Future<String?> _uploadFile(File file, String folder) async {
     try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('foods/$folder/${DateTime.now().millisecondsSinceEpoch}');
+      final ref = FirebaseStorage.instance.ref().child(
+        'foods/$folder/${DateTime.now().millisecondsSinceEpoch}',
+      );
       await ref.putFile(file);
       return await ref.getDownloadURL();
     } catch (e) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Lỗi upload: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi upload: $e')));
       return null;
     }
   }
@@ -100,7 +113,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_selectedCategoryId == null || _selectedDietId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn đầy đủ danh mục và chế độ ăn')),
+        const SnackBar(
+          content: Text('Vui lòng chọn đầy đủ danh mục và chế độ ăn'),
+        ),
       );
       return;
     }
@@ -108,13 +123,41 @@ class _AddFoodPageState extends State<AddFoodPage> {
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
 
+    // UPLOAD ẢNH & VIDEO
     String? imageUrl;
     String? videoUrl;
+
     if (_imageFile != null) imageUrl = await _uploadFile(_imageFile!, 'images');
     if (_videoFile != null) videoUrl = await _uploadFile(_videoFile!, 'videos');
 
-    final category = _categories.firstWhere((e) => e['id'] == _selectedCategoryId);
+    // Lấy category & diet info
+    final category = _categories.firstWhere(
+      (e) => e['id'] == _selectedCategoryId,
+    );
     final diet = _diets.firstWhere((e) => e['id'] == _selectedDietId);
+
+    // ===============================
+    // ⭐ TỰ ĐỘNG SINH KEYWORDS ⭐
+    // ===============================
+
+    final ingredientService = IngredientKeywordService();
+    final visionService = KeywordGeneratorService();
+
+    // Keywords từ nguyên liệu người nhập
+    final ingredientKeywords = await ingredientService.generateKeywords(
+      _ingredientsController.text.trim(),
+    );
+
+    // Keywords từ ảnh Vision API
+    List<String> imageKeywords = [];
+    if (_imageFile != null) {
+      imageKeywords = await visionService.generateKeywords(_imageFile!);
+    }
+
+    // Gộp 2 nguồn keywords
+    final keywords = {...ingredientKeywords, ...imageKeywords}.toList();
+
+    // ===============================
 
     await FirebaseFirestore.instance.collection('foods').add({
       'name': _nameController.text.trim(),
@@ -127,14 +170,16 @@ class _AddFoodPageState extends State<AddFoodPage> {
       'dietName': diet['name'],
       'image_url': imageUrl ?? '',
       'video_url': videoUrl ?? '',
+      'keywords': keywords, // ⭐ LƯU KEYWORDS VÀO FIRESTORE ⭐
       'authorId': user?.uid,
       'authorEmail': user?.email ?? 'Ẩn danh',
       'created_at': FieldValue.serverTimestamp(),
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Thêm món ăn thành công!')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Thêm món ăn thành công!')));
       Navigator.pop(context);
     }
 
@@ -161,7 +206,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
               TextFormField(
                 controller: _caloriesController,
-                decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
+                decoration: const InputDecoration(
+                  labelText: 'Lượng calo (kcal)',
+                ),
                 keyboardType: TextInputType.number,
                 validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
               ),
@@ -171,10 +218,12 @@ class _AddFoodPageState extends State<AddFoodPage> {
                 initialValue: _selectedCategoryId,
                 decoration: const InputDecoration(labelText: 'Danh mục món ăn'),
                 items: _categories
-                    .map((cat) => DropdownMenuItem<String>(
-                          value: cat['id'],
-                          child: Text(cat['name']),
-                        ))
+                    .map(
+                      (cat) => DropdownMenuItem<String>(
+                        value: cat['id'],
+                        child: Text(cat['name']),
+                      ),
+                    )
                     .toList(),
                 onChanged: (val) => setState(() => _selectedCategoryId = val),
                 validator: (v) => v == null ? 'Chọn danh mục món ăn' : null,
@@ -185,10 +234,12 @@ class _AddFoodPageState extends State<AddFoodPage> {
                 initialValue: _selectedDietId,
                 decoration: const InputDecoration(labelText: 'Chế độ ăn'),
                 items: _diets
-                    .map((diet) => DropdownMenuItem<String>(
-                          value: diet['id'],
-                          child: Text(diet['name']),
-                        ))
+                    .map(
+                      (diet) => DropdownMenuItem<String>(
+                        value: diet['id'],
+                        child: Text(diet['name']),
+                      ),
+                    )
                     .toList(),
                 onChanged: (val) => setState(() => _selectedDietId = val),
                 validator: (v) => v == null ? 'Chọn chế độ ăn' : null,
@@ -205,7 +256,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
               TextFormField(
                 controller: _instructionsController,
-                decoration: const InputDecoration(labelText: 'Các bước thực hiện'),
+                decoration: const InputDecoration(
+                  labelText: 'Các bước thực hiện',
+                ),
                 maxLines: 5,
                 validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
               ),

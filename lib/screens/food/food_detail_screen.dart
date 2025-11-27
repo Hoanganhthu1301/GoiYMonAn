@@ -7,6 +7,7 @@ import '../../services/like_service.dart';
 import '../profile/profile_screen.dart';
 import '../../widgets/download_recipe_button.dart';
 import '../../widgets/comment_section.dart';
+import '../../services/intake_service.dart';
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
@@ -255,6 +256,43 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text("Calo: $calories kcal"),
+                            const SizedBox(height: 8),
+                            // === Nút ghi nhận món đã ăn ===
+                            ElevatedButton.icon(
+                              onPressed: uid == null
+                                  ? null
+                                  : () async {
+                                      final kcal = (data['calories'] ?? 0)
+                                          .toDouble();
+                                      final name = data['name'] ?? '';
+
+                                      await IntakeService().addConsumption(
+                                        uid: uid!,
+                                        foodId: widget.foodId,
+                                        foodName: name,
+                                        calories: kcal,
+                                        portions: 1,
+                                      );
+
+                                      if (!mounted) return;
+
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            "Đã ghi nhận: $name (+$kcal kcal)",
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              icon: const Icon(Icons.restaurant),
+                              label: const Text('Tôi đã ăn món này'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                              ),
+                            ),
+
                             if (diet.isNotEmpty) Text("Chế độ ăn: $diet"),
                             if (categoryType.isNotEmpty)
                               Text("Loại món ăn: $categoryType"),

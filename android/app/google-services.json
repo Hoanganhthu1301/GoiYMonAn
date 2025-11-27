@@ -12,7 +12,28 @@
           "package_name": "com.example.doan"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "655103036581-9shlqupovld5342uhrksg97s5dcuqjjb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doan",
+            "certificate_hash": "9a0886eb050e147a78027a4bcfdb274ed1ef36f6"
+          }
+        },
+        {
+          "client_id": "655103036581-p6hqo5n2rqj8jputghpisac15an9aqjt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doan",
+            "certificate_hash": "23bbb47666e81605759dec41b738abcc90afee5c"
+          }
+        },
+        {
+          "client_id": "655103036581-4ppr9r2qv150d561u9dmfdtfj1kk8j01.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAtK9TcwPTexCe4MiETVDw4qnU_oVq-hGY"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "655103036581-4ppr9r2qv150d561u9dmfdtfj1kk8j01.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "655103036581-r75k4gn8qqgntio97adhh1spnft87jrq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.doan"
+              }
+            }
+          ]
         }
       }
     },
@@ -31,7 +64,12 @@
           "package_name": "com.example.hoanganhthu"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "655103036581-4ppr9r2qv150d561u9dmfdtfj1kk8j01.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAtK9TcwPTexCe4MiETVDw4qnU_oVq-hGY"
@@ -39,7 +77,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "655103036581-4ppr9r2qv150d561u9dmfdtfj1kk8j01.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "655103036581-r75k4gn8qqgntio97adhh1spnft87jrq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.doan"
+              }
+            }
+          ]
         }
       }
     }
