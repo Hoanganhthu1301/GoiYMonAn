@@ -20,6 +20,7 @@ import '../../services/calorie_service.dart';
 import '../../services/intake_service.dart';
 import 'package:doan/screens/scan/food_scan_screen.dart';
 import '../calorie/today_intake_screen.dart';
+import '../scan/calorie_scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -426,6 +427,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           icon: const Icon(Icons.camera_enhance),
                           backgroundColor: Colors.orange,
                         ),
+                        _buildFeatureCard(
+                          'Quét calo bữa ăn',
+                          Icons.camera,
+                          Colors.red,
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CalorieScanScreen(),
+                              ),
+                            );
+                          },
+                        ),
+
                         _buildFeatureCard(
                           'Đã lưu',
                           Icons.bookmark,

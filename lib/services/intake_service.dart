@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// ===============================
+///  MODEL Consumption (không tách file)
+/// ===============================
 class Consumption {
   final String id;
   final String foodId;
@@ -18,10 +21,15 @@ class Consumption {
   });
 }
 
+/// ===============================
+///  SERVICE IntakeService
+/// ===============================
 class IntakeService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Ghi món ăn đã ăn
+  /// ---------------------------------------------------
+  /// ⭐ 1) GHI MÓN ĂN ĐÃ ĂN
+  /// ---------------------------------------------------
   Future<void> addConsumption({
     required String uid,
     required String foodId,
@@ -44,7 +52,9 @@ class IntakeService {
     });
   }
 
-  /// Lấy tất cả lịch sử món ăn
+  /// ---------------------------------------------------
+  /// ⭐ 2) LẤY TOÀN BỘ LỊCH SỬ MÓN ĂN
+  /// ---------------------------------------------------
   Stream<List<Consumption>> allConsumptionsStream(String uid) {
     return _db
         .collection("users")
@@ -68,7 +78,9 @@ class IntakeService {
         });
   }
 
-  /// Lấy danh sách theo ngày được chọn
+  /// ---------------------------------------------------
+  /// ⭐ 3) LẤY LỊCH SỬ THEO NGÀY
+  /// ---------------------------------------------------
   Future<List<Consumption>> consumptionsByDate(
     String uid,
     DateTime date,
@@ -98,7 +110,9 @@ class IntakeService {
     }).toList();
   }
 
-  /// ⭐ GIỮ LẠI: Tổng calo hôm nay (realtime)
+  /// ---------------------------------------------------
+  /// ⭐ 4) TỔNG CALO HÔM NAY - realtime
+  /// ---------------------------------------------------
   Stream<double> todayCaloriesTotalStream(String uid) {
     final start = DateTime(
       DateTime.now().year,
@@ -122,7 +136,9 @@ class IntakeService {
         });
   }
 
-  /// ⭐ Map để vẽ biểu đồ
+  /// ---------------------------------------------------
+  /// ⭐ 5) MAP DỮ LIỆU BIỂU ĐỒ CALO
+  /// ---------------------------------------------------
   Map<DateTime, double> caloriesByDay(List<Consumption> all) {
     final Map<DateTime, double> result = {};
 
@@ -138,18 +154,18 @@ class IntakeService {
     return result;
   }
 
-  // ===========================================================
-  // ⭐⭐ PHẦN MỚI: LƯU & LẤY CÂN NẶNG THEO THÁNG ⭐⭐
-  // ===========================================================
+  /// ===========================================================
+  /// ⭐⭐ 6) LƯU & LẤY CÂN NẶNG THEO THÁNG ⭐⭐
+  /// ===========================================================
 
-  /// Lưu cân nặng theo tháng
+  /// Lưu cân nặng
   Future<void> saveWeight({
     required String uid,
     required double weight,
     required int month,
     required int year,
   }) async {
-    final id = "$year-$month"; // docId = 2025-1, 2025-2...
+    final id = "$year-$month";
 
     await _db.collection("users").doc(uid).collection("weights").doc(id).set({
       "weight": weight,
@@ -159,7 +175,7 @@ class IntakeService {
     });
   }
 
-  /// Lấy toàn bộ cân nặng trong năm
+  /// Lấy cân nặng theo tháng trong năm hiện tại
   Stream<Map<int, double>> weightByMonthStream(String uid) {
     final year = DateTime.now().year;
 

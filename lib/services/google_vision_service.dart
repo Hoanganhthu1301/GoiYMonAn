@@ -3,13 +3,13 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class GoogleVisionService {
-  final String apiKey = "AIzaSyCVcGq_f22V-RSAP7rreTu9TrsJbfSiZiY";
+  static const String _apiKey = "AIzaSyCVcGq_f22V-RSAP7rreTu9TrsJbfSiZiY";
 
-  Future<List<String>> detectLabels(File image) async {
-    final bytes = await image.readAsBytes();
-    final base64Image = base64Encode(bytes);
+  /// Nhận diện label từ ảnh
+  Future<List<String>> detectLabels(File imageFile) async {
+    final base64Image = base64Encode(await imageFile.readAsBytes());
 
-    final url = "https://vision.googleapis.com/v1/images:annotate?key=$apiKey";
+    final url = "https://vision.googleapis.com/v1/images:annotate?key=$_apiKey";
 
     final body = {
       "requests": [
@@ -22,20 +22,17 @@ class GoogleVisionService {
       ],
     };
 
-    final response = await http.post(
+    final res = await http.post(
       Uri.parse(url),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(body),
     );
 
-    final data = jsonDecode(response.body);
+    if (res.statusCode != 200) return [];
 
-    final labels = data["responses"][0]["labelAnnotations"];
+    final labels =
+        jsonDecode(res.body)["responses"][0]["labelAnnotations"] ?? [];
 
-    if (labels == null) return [];
-
-    return labels
-        .map<String>((e) => e["description"].toString().toLowerCase())
-        .toList();
+    return labels.map<String>((l) => l["description"].toString()).toList();
   }
 }
