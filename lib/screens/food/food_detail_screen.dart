@@ -1,12 +1,16 @@
+// lib/screens/food/food_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
+import 'package:timeago/timeago.dart' as timeago;
+
 import '../../services/like_service.dart';
-import '../profile/profile_screen.dart';
+import '../../services/intake_service.dart';
 import '../../widgets/download_recipe_button.dart';
 import '../../widgets/comment_section.dart';
+import '../profile/profile_screen.dart';
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
@@ -16,13 +20,106 @@ class FoodDetailScreen extends StatefulWidget {
   State<FoodDetailScreen> createState() => _FoodDetailScreenState();
 }
 
-class _FoodDetailScreenState extends State<FoodDetailScreen> {
+class _FoodDetailScreenState extends State<FoodDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late final Future<DocumentSnapshot<Map<String, dynamic>>> _foodFuture;
   VideoPlayerController? _videoController;
-  String instructions = '';
-  String categoryType = '';
+  String _instructions = '';
+  String _categoryName = '';
   late LikeService _likeSvc;
-  final String? uid = FirebaseAuth.instance.currentUser?.uid;
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
   final ScrollController _scrollController = ScrollController();
+  late final AnimationController _animController;
+  bool _commentsExpanded = false;
+  
+  Widget _previewCommentItem(Map<String, dynamic> doc) {
+    final text = doc['text'] ?? '';
+    final authorName = doc['authorName'] ?? 'Người dùng';
+    final ts = doc['createdAt'];
+    final id = doc['id'] ?? '';
+    final authorId = doc['authorId'] ?? '';
+
+    DateTime time;
+    if (ts is Timestamp) {
+      time = ts.toDate();
+    } else if (ts is Map && ts['_seconds'] != null) {
+      time = DateTime.fromMillisecondsSinceEpoch((ts['_seconds'] as int) * 1000);
+    } else {
+      time = DateTime.now();
+    }
+
+    final timeStr = timeago.format(time, locale: 'vi');
+
+    final isOwner = authorId == _uid;
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(authorName, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 6),
+          Text(text),
+          const SizedBox(height: 6),
+          Text(timeStr, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+      trailing: isOwner
+          ? IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 24),
+              icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+              onPressed: () => _confirmAndDeleteComment(id, authorId),
+            )
+          : null,
+    );
+  }
+
+  Future<void> _confirmAndDeleteComment(String docId, String authorId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.uid != authorId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bạn không có quyền xóa bình luận này')));
+      }
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Xác nhận'),
+        content: const Text('Bạn có chắc muốn xóa bình luận này?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xóa')),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('comments').doc(docId).delete();
+      if (mounted) {
+        setState(() {}); // rebuild so FutureBuilder re-fetches preview
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa bình luận')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Xóa thất bại: $e')));
+    }
+  }
+
+
+  @override
+  void initState() {
+    super.initState();
+    _foodFuture = FirebaseFirestore.instance
+        .collection('foods')
+        .doc(widget.foodId)
+        .get();
+    _animController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+  }
 
   @override
   void didChangeDependencies() {
@@ -33,27 +130,26 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   @override
   void dispose() {
     _videoController?.dispose();
+    _animController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _setupVideo(String videoUrl) {
-    if (videoUrl.isNotEmpty) {
-      _videoController ??= VideoPlayerController.networkUrl(Uri.parse(videoUrl))
-        ..initialize().then((_) {
-          setState(() {});
-        });
-    }
+  void _videoInit(String videoUrl) {
+    if (videoUrl.isEmpty) return;
+    if (_videoController != null) return;
+    _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl))
+      ..initialize().then((_) {
+        if (mounted) setState(() {});
+      }).catchError((_) {});
   }
 
   void _togglePlayPause() {
     if (_videoController == null) return;
     setState(() {
-      if (_videoController!.value.isPlaying) {
-        _videoController!.pause();
-      } else {
-        _videoController!.play();
-      }
+      final playing = _videoController!.value.isPlaying;
+      playing ? _videoController!.pause() : _videoController!.play();
+      _animController.forward().then((_) => _animController.reverse());
     });
   }
 
@@ -67,232 +163,356 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
     _videoController!.seekTo(target);
   }
 
-  // ⚡ Thay đổi tốc độ video
   void _changeSpeed(double delta) {
     if (_videoController == null) return;
-    final curSpeed = _videoController!.value.playbackSpeed;
-    _videoController!.setPlaybackSpeed((curSpeed + delta).clamp(0.25, 3.0));
+    final cur = _videoController!.value.playbackSpeed;
+    final next = (cur + delta).clamp(0.25, 3.0);
+    _videoController!.setPlaybackSpeed(next);
     setState(() {});
-  }
-
-  void _scrollToComments() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final primary = Colors.green.shade700;
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FBF9),
+      backgroundColor: const Color(0xFFF6FBF6),
       appBar: AppBar(
-        backgroundColor: Colors.green.shade600,
+        backgroundColor: primary,
         title: const Text("Chi tiết món ăn", style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [DownloadRecipeButton(foodId: widget.foodId)],
       ),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future: FirebaseFirestore.instance
-            .collection('foods')
-            .doc(widget.foodId)
-            .get(),
+        future: _foodFuture,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text("Không tìm thấy món ăn"));
           }
 
           final data = snapshot.data!.data()!;
-          final imageUrl = data['image_url'] ?? '';
-          final name = data['name'] ?? '';
-          final calories = data['calories']?.toString() ?? '0';
-          final diet = data['dietName'] ?? '';
-          final categoryId = data['categoryId'] ?? '';
-          final videoUrl = data['video_url'] ?? '';
-          final ingredients = data['ingredients'] ?? '';
+          final imageUrl = (data['image_url'] ?? '') as String;
+          final name = (data['name'] ?? '') as String;
+          final calories = (data['calories'] ?? 0).toString();
+          final diet = (data['dietName'] ?? '') as String;
+          final categoryId = (data['categoryId'] ?? '') as String;
+          final videoUrl = (data['video_url'] ?? '') as String;
+          final ingredients = (data['ingredients'] ?? '') as String;
 
-          final instrData = data['instructions'];
-          if (instrData is String){ 
-            instructions = instrData;
+          final instr = data['instructions'];
+          if (instr is String) {
+            _instructions = instr;
+          } else if (instr is List) {
+            _instructions = instr.join('\n');
           }
-          else if (instrData is List) { 
-            instructions = instrData.join("\n");}
 
-          if (categoryId.isNotEmpty && categoryType.isEmpty) {
-            FirebaseFirestore.instance.collection('categories').doc(categoryId).get().then((catSnap) {
-              if (catSnap.exists) {
-                setState(() => categoryType = catSnap.data()?['name'] ?? '');
+          // load category name once
+          if (categoryId.isNotEmpty && _categoryName.isEmpty) {
+            FirebaseFirestore.instance
+                .collection('categories')
+                .doc(categoryId)
+                .get()
+                .then((cat) {
+              if (cat.exists && mounted) {
+                setState(() => _categoryName = (cat.data()?['name'] ?? '') as String);
               }
-            });
+            }).catchError((_) {});
           }
 
-          final authorId = data['authorId'] ?? data['uid'] ?? '';
-          final authorNameFb = data['authorName'] ?? 'Người dùng';
-          final authorPhotoURLFb = data['authorPhotoURL'] ?? '';
+          final authorId = (data['authorId'] ?? data['uid'] ?? '') as String;
+          final authorName = (data['authorName'] ?? 'Người dùng') as String;
+          final authorPhoto = (data['authorPhotoURL'] ?? '') as String;
 
           if (_videoController == null && videoUrl.isNotEmpty) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _setupVideo(videoUrl));
+            WidgetsBinding.instance.addPostFrameCallback((_) => _videoInit(videoUrl));
           }
 
-          return SingleChildScrollView(
+
+          return CustomScrollView(
             controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Ảnh món ăn
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: imageUrl.isNotEmpty
-                      ? Image.network(imageUrl, width: double.infinity, height: 240, fit: BoxFit.cover)
-                      : Container(
-                          width: double.infinity,
-                          height: 220,
-                          color: Colors.green.shade100,
-                          child: const Icon(Icons.fastfood, size: 80, color: Colors.green),
-                        ),
-                ),
-                const SizedBox(height: 16),
-
-                // Tên món
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green.shade700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Calo, chế độ ăn, loại món ăn (mỗi dòng riêng)
-                Column(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Calo: $calories kcal", style: const TextStyle(fontSize: 16)),
-                    if (diet.isNotEmpty) Text("Chế độ ăn: $diet", style: const TextStyle(fontSize: 16)),
-                    if (categoryType.isNotEmpty)
-                      Text("Loại món ăn: $categoryType", style: const TextStyle(fontSize: 16)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Tim, bình luận, lưu
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    StreamBuilder<bool>(
-                      stream: _likeSvc.isLikedStream(widget.foodId),
-                      initialData: false,
-                      builder: (context, s) {
-                        final liked = s.data ?? false;
-                        return IconButton(
-                          icon: Icon(
-                            liked ? Icons.favorite : Icons.favorite_border,
-                            color: liked ? Colors.pink : Colors.grey,
-                          ),
-                          onPressed: uid == null ? null : () => _likeSvc.toggleLike(widget.foodId, liked),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.comment, color: Colors.grey),
-                      onPressed: _scrollToComments,
-                    ),
-                    StreamBuilder<bool>(
-                      stream: _likeSvc.isSavedStream(widget.foodId),
-                      initialData: false,
-                      builder: (context, s) {
-                        final saved = s.data ?? false;
-                        return IconButton(
-                          icon: Icon(
-                            saved ? Icons.bookmark : Icons.bookmark_border,
-                            color: saved ? Colors.green : Colors.grey,
-                          ),
-                          onPressed: uid == null ? null : () => _likeSvc.toggleSave(widget.foodId, saved),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const Divider(),
-
-                // Người đăng
-                _AuthorSection(
-                  authorId: authorId,
-                  fallbackName: authorNameFb,
-                  fallbackPhotoURL: authorPhotoURLFb,
-                ),
-                const SizedBox(height: 16),
-
-                // Nguyên liệu
-                Text(
-                  "Nguyên liệu",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
-                ),
-                const SizedBox(height: 6),
-                Text(ingredients, style: const TextStyle(fontSize: 16, height: 1.5)),
-
-                const SizedBox(height: 16),
-
-                // Hướng dẫn
-                Text(
-                  " Hướng dẫn nấu",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  instructions.isNotEmpty ? instructions : "Chưa có hướng dẫn.",
-                  style: const TextStyle(fontSize: 16, height: 1.5),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Video (có điều chỉnh tốc độ)
-                if (_videoController != null && _videoController!.value.isInitialized)
-                  Column(
-                    children: [
-                      AspectRatio(
-                        aspectRatio: _videoController!.value.aspectRatio,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: VideoPlayer(_videoController!),
-                        ),
+                    // Image
+                    if (imageUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
+                        child: Image.network(imageUrl, width: double.infinity, height: 260, fit: BoxFit.cover),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        height: 240,
+                        color: Colors.green.shade100,
+                        child: const Icon(Icons.fastfood, size: 80, color: Colors.white),
                       ),
-                      VideoProgressIndicator(_videoController!, allowScrubbing: true),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          IconButton(icon: const Icon(Icons.replay_10), onPressed: () => _seekBy(const Duration(seconds: -10))),
-                          IconButton(
-                            icon: Icon(_videoController!.value.isPlaying ? Icons.pause : Icons.play_arrow),
-                            onPressed: _togglePlayPause,
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          IconButton(icon: const Icon(Icons.forward_10), onPressed: () => _seekBy(const Duration(seconds: 10))),
-                          IconButton(icon: const Icon(Icons.fast_rewind), onPressed: () => _changeSpeed(-0.25)),
-                          IconButton(icon: const Icon(Icons.fast_forward), onPressed: () => _changeSpeed(0.25)),
-                          Text('${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x'),
+                          const SizedBox(width: 8),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              StreamBuilder<bool>(
+                                stream: _likeSvc.isLikedStream(widget.foodId),
+                                initialData: false,
+                                builder: (c, s) {
+                                  final liked = s.data ?? false;
+                                  return IconButton(
+                                    tooltip: liked ? 'Bỏ thích' : 'Thích',
+                                    onPressed: _uid == null ? null : () => _likeSvc.toggleLike(widget.foodId, liked),
+                                    icon: Icon(liked ? Icons.favorite : Icons.favorite_border, color: liked ? Colors.pink : Colors.grey),
+                                  );
+                                },
+                              ),
+                              StreamBuilder<bool>(
+                                stream: _likeSvc.isSavedStream(widget.foodId),
+                                initialData: false,
+                                builder: (c, s) {
+                                  final saved = s.data ?? false;
+                                  return IconButton(
+                                    tooltip: saved ? 'Bỏ lưu' : 'Lưu',
+                                    onPressed: _uid == null ? null : () => _likeSvc.toggleSave(widget.foodId, saved),
+                                    icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? Colors.green : Colors.grey),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
+                    ),
 
-                // Bình luận
-                const Divider(),
-                Text(
-                  " Bình luận",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                    const SizedBox(height: 8),
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16),
+  child: Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children: [
+      Chip(
+        avatar: const Icon(Icons.local_fire_department, color: Colors.orange),
+        label: Text('${data['calories'] ?? 0} kcal'),
+      ),
+      Chip(
+        // avatar: const Icon(Icons.fitness_center, color: Colors.blue),
+        label: Text('Pro ${data['protein'] ?? 0} g '),
+      ),
+      Chip(
+        // avatar: const Icon(Icons.coffee, color: Colors.brown),
+        label: Text('Carbs ${data['carbs'] ?? 0} g'),
+      ),
+      Chip(
+        // avatar: const Icon(Icons.opacity, color: Colors.red),
+        label: Text('Fat ${data['fat'] ?? 0} g'),
+      ),
+      if (diet.isNotEmpty)
+        Chip(label: Text(diet)),
+      ElevatedButton.icon(
+        onPressed: _uid == null
+            ? null
+            : () async {
+                final kcal = (data['calories'] ?? 0).toDouble();
+                final protein = (data['protein'] ?? 0).toDouble();
+                final carbs = (data['carbs'] ?? 0).toDouble();
+                final fat = (data['fat'] ?? 0).toDouble();
+                final nameLocal = data['name'] ?? '';
+                try {
+                  await IntakeService().addConsumption(
+                    uid: _uid!,
+                    foodId: widget.foodId,
+                    foodName: nameLocal,
+                    calories: kcal,
+                    portions: 1,
+                    protein: protein,
+                    carbs: carbs,
+                    fat: fat,
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Đã ghi nhận: $nameLocal (+${kcal.toString()} kcal)')),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi khi ghi nhận: $e')),
+                  );
+                }
+              },
+        icon: const Icon(Icons.restaurant),
+        label: const Text('Tôi đã ăn món này'),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+      ),
+    ],
+  ),
+),
+const SizedBox(height: 16),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _AuthorTile(authorId: authorId, fallbackName: authorName, fallbackPhotoURL: authorPhoto),
+                    ),
+                    const SizedBox(height: 18),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('Nguyên liệu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primary)),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), 
+                              child: ExpandableText(
+                                text: ingredients.isNotEmpty ? ingredients : 'Chưa có thông tin nguyên liệu',
+                                maxLines: 6, // hiển thị 6 dòng, bấm xem thêm để mở rộng
+                                style: const TextStyle(fontSize: 16, height: 1.5),
+                              ),
+                            ),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Hướng dẫn nấu',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primary),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _InfoGlassCard(
+                        child: ExpandableText(
+                          text: _instructions.isNotEmpty ? _instructions : 'Chưa có hướng dẫn.',
+                          maxLines: 6,
+                          style: const TextStyle(fontSize: 16, height: 1.5),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    if (_videoController != null && _videoController!.value.isInitialized)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          children: [
+                            ClipRRect(borderRadius: BorderRadius.circular(12), child: AspectRatio(aspectRatio: _videoController!.value.aspectRatio, child: VideoPlayer(_videoController!))),
+                            VideoProgressIndicator(_videoController!, allowScrubbing: true),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                IconButton(icon: const Icon(Icons.replay_10), onPressed: () => _seekBy(const Duration(seconds: -10))),
+                                IconButton(icon: Icon(_videoController!.value.isPlaying ? Icons.pause : Icons.play_arrow), onPressed: _togglePlayPause),
+                                IconButton(icon: const Icon(Icons.forward_10), onPressed: () => _seekBy(const Duration(seconds: 10))),
+                                IconButton(icon: const Icon(Icons.fast_rewind), onPressed: () => _changeSpeed(-0.25)),
+                                IconButton(icon: const Icon(Icons.fast_forward), onPressed: () => _changeSpeed(0.25)),
+                                Text('${_videoController!.value.playbackSpeed.toStringAsFixed(2)}x'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Bình luận',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primary),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // comment preview + expand
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Preview mode: show up to 4 comments + input. If expanded, show full CommentSection.
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOut,
+                            child: _commentsExpanded
+                                ? CommentSection(foodId: widget.foodId, showList: true)
+                                : FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('comments')
+                                        .where('foodId', isEqualTo: widget.foodId)
+                                        .orderBy('createdAt', descending: true)
+                                        .limit(5)
+                                        .get(),
+                                    builder: (context, snap) {
+                                      if (snap.connectionState == ConnectionState.waiting) {
+                                        // show a small placeholder + input
+                                        return Column(children: [
+                                          const SizedBox(height: 8),
+                                          CommentSection(foodId: widget.foodId, showList: false),
+                                        ]);
+                                      }
+
+                                      final docs = snap.data?.docs ?? [];
+                                      final count = docs.length;
+
+                                      return Column(
+                                        children: [
+                                          // show up to 4 preview items
+                                          if (count > 0)
+                                            ...docs.take(4).map((d) => _previewCommentItem({
+                                                  'id': d.id,
+                                                  'text': d.data()['text'],
+                                                  'authorName': d.data()['authorName'],
+                                                  'authorId': d.data()['authorId'],
+                                                  'createdAt': d.data()['createdAt'],
+                                                })).toList(),
+                                          // always show input box (collapsed mode)
+                                          const SizedBox(height: 8),
+                                          CommentSection(foodId: widget.foodId, showList: false),
+                                          const SizedBox(height: 8),
+                                          // if more than 4 comments, show expand button
+                                          if (count > 4)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: TextButton(
+                                                style: TextButton.styleFrom(
+                                                  padding: EdgeInsets.zero,
+                                                  minimumSize: const Size(0, 0),
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  foregroundColor: primary,
+                                                ),
+                                                onPressed: () => setState(() => _commentsExpanded = true),
+                                                child: Text('Xem thêm bình luận', style: TextStyle(color: primary)),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                  ],
                 ),
-                const SizedBox(height: 8),
-                CommentSection(foodId: widget.foodId),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
@@ -300,60 +520,158 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   }
 }
 
-// 👤 Người đăng
-class _AuthorSection extends StatelessWidget {
+/// Author tile
+class _AuthorTile extends StatelessWidget {
   final String authorId;
   final String fallbackName;
   final String fallbackPhotoURL;
 
-  const _AuthorSection({
-    required this.authorId,
-    required this.fallbackName,
-    required this.fallbackPhotoURL,
-  });
+  const _AuthorTile({required this.authorId, required this.fallbackName, required this.fallbackPhotoURL});
 
   @override
   Widget build(BuildContext context) {
-    if (authorId.isEmpty) {
-      return _buildTile(fallbackName, fallbackPhotoURL);
-    }
+    if (authorId.isEmpty) return _buildTile(fallbackName, fallbackPhotoURL);
 
-    final userDocStream = FirebaseFirestore.instance.collection('users').doc(authorId).snapshots();
-
+    final userStream = FirebaseFirestore.instance.collection('users').doc(authorId).snapshots();
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: userDocStream,
+      stream: userStream,
       builder: (context, snap) {
         final data = snap.data?.data();
-        final displayName = (data?['displayName'] ?? '').toString().trim();
-        final photoURL = (data?['photoURL'] ?? '').toString().trim();
-
+        final displayName = (data?['displayName'] ?? '') as String;
+        final photo = (data?['photoURL'] ?? '') as String;
         return InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(userId: authorId))),
-          child: _buildTile(displayName.isNotEmpty ? displayName : fallbackName, photoURL.isNotEmpty ? photoURL : fallbackPhotoURL),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfileScreen(userId: authorId),
+              ),
+            );
+          },
+          child: _buildTile(displayName.isNotEmpty ? displayName : fallbackName,
+                             photo.isNotEmpty ? photo : fallbackPhotoURL),
         );
       },
     );
   }
 
-  Widget _buildTile(String name, String photoURL) {
+  Widget _buildTile(String name, String photoUrl) {
     return Row(
       children: [
         CircleAvatar(
-          radius: 24,
-          backgroundImage: photoURL.isNotEmpty ? NetworkImage(photoURL) : null,
-          backgroundColor: Colors.green.withValues(alpha: 0.2),
-          child: photoURL.isEmpty ? const Icon(Icons.person, color: Colors.green) : null,
+          radius: 26,
+          backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          backgroundColor: const Color.fromRGBO(76, 175, 80, 0.12),
+          child: photoUrl.isEmpty ? const Icon(Icons.person, color: Colors.green) : null,
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const Text('Người đăng', style: TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Người đăng', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+        ]),
         const Spacer(),
         const Icon(Icons.chevron_right, color: Colors.grey),
+      ],
+    );
+  }
+}
+
+
+/// Glass-style info card
+class _InfoGlassCard extends StatelessWidget {
+  final Widget child;
+  const _InfoGlassCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color.fromRGBO(255, 255, 255, 0.92),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.04), blurRadius: 12,
+        offset: const Offset(0, 6))],
+      ),
+      child: child,
+    );
+  }
+}
+/// Reusable widget: rút gọn văn bản dài với nút "Xem thêm" / "Thu gọn"
+class ExpandableText extends StatefulWidget {
+  final String text;
+  final int maxLines;
+  final TextStyle? style;
+  final String expandLabel;
+  final String collapseLabel;
+
+  const ExpandableText({
+    super.key,
+    required this.text,
+    this.maxLines = 6,
+    this.style,
+    this.expandLabel = 'Xem thêm',
+    this.collapseLabel = 'Thu gọn',
+  });
+
+  @override
+  State<ExpandableText> createState() => _ExpandableTextState();
+}
+
+class _ExpandableTextState extends State<ExpandableText> {
+  bool _expanded = false;
+  bool _canExpand = false;
+
+  // We detect if text will exceed maxLines by measuring it in a post-frame callback
+  @override
+  void initState() {
+    super.initState();
+    // Delay measurement to after first layout
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkOverflow());
+  }
+
+  void _checkOverflow() {
+    final tp = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style ?? DefaultTextStyle.of(context).style),
+      maxLines: widget.maxLines,
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout(maxWidth: MediaQuery.of(context).size.width - 32); // approximate padding
+    final didOverflow = tp.didExceedMaxLines;
+    if (mounted && didOverflow != _canExpand) {
+      setState(() => _canExpand = didOverflow);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: ConstrainedBox(
+            constraints: _expanded
+                ? const BoxConstraints()
+                : BoxConstraints(maxHeight: widget.maxLines * (widget.style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 14) * 1.3),
+            child: Text(
+              widget.text,
+              style: widget.style,
+              overflow: TextOverflow.fade,
+            ),
+          ),
+        ),
+        if (_canExpand)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              child: Text(_expanded ? widget.collapseLabel : widget.expandLabel),
+            ),
+          ),
       ],
     );
   }

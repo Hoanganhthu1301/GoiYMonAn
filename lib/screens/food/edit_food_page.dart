@@ -23,6 +23,9 @@ class _EditFoodPageState extends State<EditFoodPage> {
   late TextEditingController _caloriesController;
   late TextEditingController _ingredientsController;
   late TextEditingController _instructionsController;
+  late TextEditingController _proteinController;
+  late TextEditingController _carbsController;
+  late TextEditingController _fatController;
 
   String? _selectedCategoryId;
   String? _selectedDietId;
@@ -47,6 +50,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
     _nameController = TextEditingController(text: widget.data['name']);
     _caloriesController =
         TextEditingController(text: widget.data['calories'].toString());
+    _proteinController = TextEditingController(
+        text: widget.data['protein']?.toString() ?? '');
+    _carbsController = TextEditingController(
+        text: widget.data['carbs']?.toString() ?? '');
+    _fatController = TextEditingController(
+        text: widget.data['fat']?.toString() ?? '');
     _ingredientsController =
         TextEditingController(text: widget.data['ingredients']);
     _instructionsController =
@@ -160,21 +169,25 @@ class _EditFoodPageState extends State<EditFoodPage> {
       final diet = _diets.firstWhere((e) => e['id'] == _selectedDietId);
 
       await FirebaseFirestore.instance
-          .collection('foods')
-          .doc(widget.foodId)
-          .update({
-        'name': _nameController.text.trim(),
-        'calories': int.tryParse(_caloriesController.text.trim()) ?? 0,
-        'ingredients': _ingredientsController.text.trim(),
-        'instructions': _instructionsController.text.trim(),
-        'categoryId': category['id'],
-        'categoryName': category['name'],
-        'dietId': diet['id'],
-        'dietName': diet['name'],
-        'image_url': imageUrl,
-        'video_url': videoUrl,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+    .collection('foods')
+    .doc(widget.foodId)
+    .update({
+      'name': _nameController.text.trim(),
+      'calories': int.tryParse(_caloriesController.text.trim()) ?? 0,
+      'protein': double.tryParse(_proteinController.text.trim()) ?? 0,
+      'carbs': double.tryParse(_carbsController.text.trim()) ?? 0,
+      'fat': double.tryParse(_fatController.text.trim()) ?? 0,
+      'ingredients': _ingredientsController.text.trim(),
+      'instructions': _instructionsController.text.trim(),
+      'categoryId': category['id'],
+      'categoryName': category['name'],
+      'dietId': diet['id'],
+      'dietName': diet['name'],
+      'image_url': imageUrl,
+      'video_url': videoUrl,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,14 +219,14 @@ Widget build(BuildContext context) {
       appBar: AppBar(title: const Text('Sửa món ăn')),
       body: const Center(
         child: Text(
-          '🚫 Bạn không có quyền chỉnh sửa món ăn này',
+          'Bạn không có quyền chỉnh sửa món ăn này',
           style: TextStyle(fontSize: 18, color: Colors.red),
         ),
       ),
     );
   }
 
-  // ✅ Nếu qua được đây nghĩa là có quyền
+
   return Scaffold(
     appBar: AppBar(title: const Text('Sửa món ăn')),
     body: SingleChildScrollView(
@@ -233,6 +246,29 @@ Widget build(BuildContext context) {
             TextFormField(
               controller: _caloriesController,
               decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
+              keyboardType: TextInputType.number,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _proteinController,
+              decoration: const InputDecoration(labelText: 'Protein (g)'),
+              keyboardType: TextInputType.number,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _carbsController,
+              decoration: const InputDecoration(labelText: 'Carbs (g)'),
+              keyboardType: TextInputType.number,
+              validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
+            ),
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _fatController,
+              decoration: const InputDecoration(labelText: 'Fat (g)'),
               keyboardType: TextInputType.number,
               validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
             ),

@@ -2,19 +2,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'food/manage_food_page.dart'; // Trang quản lý (admin)
 import 'home/home_screen.dart';
 import 'profile/profile_screen.dart';
-// import 'package:firebase_core/firebase_core.dart';
-// import 'dashboard_screen.dart';
-
+import 'food/food_list_screen.dart';
 import 'category/manage_category_page.dart';
 import 'account/user_management_screen.dart';
-// import 'package:firebase_core/firebase_core.dart';
-// import 'dashboard_screen.dart';
-import 'menu/daily_menu_screen.dart';
-import 'food/saved_foods_page.dart';
-
+import 'food/manage_food_page.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -52,17 +45,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (userRole == 'admin') {
           _pages = [
             const HomeScreen(),
-            const ManageFoodPage(),
-            const UserManagementScreen(),
+            FoodListScreen(),
             const ManageCategoryPage(),
+            const UserManagementScreen(),
+            const ManageFoodPage(),
             ProfileScreen(userId: currentUserId),
           ];
         } else {
           // 👉 User chỉ có Trang chủ và Cá nhân
           _pages = [
             const HomeScreen(),
-            const DailyMenuScreen(),
-            const SavedFoodsPage(),
+            FoodListScreen(),
             ProfileScreen(userId: currentUserId),
 
             ];
@@ -90,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        selectedItemColor: Colors.orange,
+        selectedItemColor: const Color(0xFF1F3B2E),
           unselectedItemColor: Colors.grey, // màu cho icon chưa chọn
           showUnselectedLabels: true,       // 🔹 luôn hiện label cho icon chưa chọn
           type: BottomNavigationBarType.fixed, // 🔹 giữ cố định layout
@@ -106,16 +99,20 @@ items: userRole == 'admin'
           label: 'Trang chủ',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.article),
-          label: 'Bài viết',
+          icon: Icon(Icons.restaurant_menu),
+          label: 'Món ăn',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.category),
+          label: 'Danh mục',
         ),
                 BottomNavigationBarItem(
           icon: Icon(Icons.person),
           label: 'Người dùng',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.category),
-          label: 'Danh mục',
+               BottomNavigationBarItem(
+          icon: Icon(Icons.article),
+          label: 'Bài viết',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),
@@ -126,16 +123,19 @@ items: userRole == 'admin'
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label:' Trang chủ',
-
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.auto_awesome),
-          label: 'Gợi ý',
+          icon: Icon(Icons.restaurant_menu),
+          label: 'Món ăn',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bookmark),
-          label: 'Đã lưu',
-        ),
+        // BottomNavigationBarItem(
+        //   icon: Icon(Icons.auto_awesome),
+        //   label: 'Gợi ý',
+        // ),
+        // BottomNavigationBarItem(
+        //   icon: Icon(Icons.bookmark),
+        //   label: 'Đã lưu',
+        // ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),
           label: 'Cá nhân',

@@ -162,6 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    
                     if (!success) ...[
                       const Text('Nhập email liên kết với tài khoản của bạn.'),
                       const SizedBox(height: 12),
@@ -292,15 +293,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const Color primaryGreen = Color(0xFF4CAF50);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Đăng Nhập')),
-      body: Padding(
+      appBar: AppBar(
+        title: const Text('Đăng Nhập'),
+        backgroundColor: primaryGreen,
+        centerTitle: true,
+      ),
+      backgroundColor: const Color(0xFFF3F9F5),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Padding(
+                padding: const EdgeInsets.all(18.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                    Image.asset(
+                      'assets/images/test.jpg', // Sử dụng tên file bạn vừa đặt
+                      height: 140, // Điều chỉnh chiều cao cho phù hợp với logo
+                      fit: BoxFit.contain,
+                    ),
+                const SizedBox(height: 24),
               // Trường Email
               TextFormField(
                 controller: _emailController,
@@ -343,7 +365,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   : ElevatedButton(
                       onPressed: _login,
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryGreen,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       child: const Text('Đăng Nhập'),
                     ),
@@ -351,33 +377,41 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
               
               // Nút Đăng nhập Google
+              const SizedBox(height: 8),
               ElevatedButton.icon(
                 icon: const Icon(Icons.g_mobiledata),
                 label: const Text('Đăng nhập với Google'),
                 onPressed: _loginWithGoogle,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red, // Màu đỏ nổi bật
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               
               const SizedBox(height: 8),
 
               // Nút Đăng nhập bằng GitHub
+              const SizedBox(height: 8),
               ElevatedButton.icon(
                 icon: const Icon(Icons.code),
                 label: const Text('Đăng nhập với GitHub'),
                 onPressed: _loginWithGitHub,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
+                  backgroundColor: Colors.black87,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
 
               // Nút Đăng nhập Ẩn danh
+              const SizedBox(height: 8),
               TextButton(
                 onPressed: _loginAnonymously,
                 child: const Text('Đăng nhập Ẩn danh'),
+                style: TextButton.styleFrom(foregroundColor: primaryGreen),
               ),
 
               // Nút Đăng ký
@@ -387,11 +421,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   MaterialPageRoute(builder: (_) => const RegisterScreen()),
                 ),
                 child: const Text('Chưa có tài khoản? Đăng ký'),
+                style: TextButton.styleFrom(foregroundColor: primaryGreen),
               ),
             ],
-          ),
-        ),
-      ),
-    );
+          ), // Column
+        ), // Form
+      ), // Padding
+    ), // Card
+  ), // ConstrainedBox
+), // Center
+), // SingleChildScrollView
+    ); // Scaffold
   }
 }

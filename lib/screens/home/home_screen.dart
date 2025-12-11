@@ -1,18 +1,20 @@
+// lib/screens/home/home_screen.dart
 // ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-import '../../services/like_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/notifications_button.dart';
-import '../../core/push/push_service_min.dart';
-import '../food/food_detail_screen.dart';
 import '../chat/all_message.dart';
-import '../food/filtered_foods_screen.dart';
-import '../../services/message_service.dart';
-import 'package:flutter/services.dart';
-// import 'package:flutter/foundation.dart';
+import 'package:doan/screens/menu/daily_menu_screen.dart';
+import 'package:doan/screens/scan/food_scan_screen.dart';
+import '../calorie/today_intake_screen.dart';
+import '../food/saved_foods_page.dart';
+import '../chat/chat_ai_screen.dart';
+import '../scan/calorie_scan_screen.dart';
+import '../../services/intake_service.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -21,654 +23,506 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
-  //  @override
-  // void initState() {
-  //   super.initState();
-  //   _printIdToken(); // 👈 Lấy token khi vào màn hình
-  // }
-
-  final _firestore = FirebaseFirestore.instance;
-  late LikeService _likeSvc;
   late AuthService _authService;
-  final _push = PushServiceMin();
-  final _msgSvc = MessageService();
-
-  List<DocumentSnapshot> _allFoods = [];
-  List<DocumentSnapshot> _displayFoods = [];
-  bool _isLoading = true;
-
-  String searchQuery = '';
-  String selectedCategory = '';
-  String selectedDiet = '';
-
   String _currentUserRole = 'guest';
   bool get _isAdmin => _currentUserRole == 'admin';
-  final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
-  static const int _pageSize = 5;
-  int _currentPage = 1;
-  int _totalPages = 1;
-
-  List<String> _dietCategories = [];
-
-  Future<void> _printIdToken() async {
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("❌ No user is currently signed in.");
-      return;
-    }
-
-    // Lấy token mới nhất
-    final String token = (await user.getIdToken(true))!;
-
-
-    // Copy vào clipboard
-    await Clipboard.setData(ClipboardData(text: token));
-
-    print("===========================================");
-    print("🔥 FIREBASE ID TOKEN (đã copy vào clipboard):");
-    print(token);
-    print("===========================================");
-    print("👉 Bạn chỉ cần Ctrl+V vào Postman là ra full token.");
-  } catch (e) {
-    print("❌ Error fetching ID token: $e");
-  }
-}
-
-Future<void> printFreshToken() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    print("⚠ No user signed in");
-    return;
-  }
-
-  final token = await user.getIdToken(true); // ★ ép tạo token mới
-  print("🔥 NEW TOKEN:");
-  print(token);
-}
-Future<void> copyIdToken() async {
-  final user = FirebaseAuth.instance.currentUser;
-
-  if (user == null) {
-    print("❌ User chưa đăng nhập");
-    return;
-  }
-
-  // Lấy token mới nhất (ép refresh)
-  final token = await user.getIdToken(true);
-
-  // Copy vào clipboard
-await Clipboard.setData(ClipboardData(text: token ?? ""));
-
-
-  print("🔥 FULL ID TOKEN đã copy vào clipboard!");
-  print("Bạn có thể dán vào Postman hoặc bất kỳ đâu.");
-}
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _push.init(context: context);
-    });
-    _listenFoods();
-    _fetchDietCategories();
-    _printIdToken();
+    _loadUserRole();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _authService = context.read<AuthService>();
-    _likeSvc = context.read<LikeService>();
-    _loadUserRole();
+    _authService = Provider.of<AuthService>(context, listen: false);
   }
 
   Future<void> _loadUserRole() async {
-    final role = await _authService.getCurrentUserRole();
-    if (mounted) {
-      setState(() {
-        _currentUserRole = role;
-      });
-    }
+    final role = await _authServiceGetRoleSafe();
+    if (mounted) setState(() => _currentUserRole = role);
   }
 
-  void _listenFoods() {
-    _firestore
-        .collection('foods')
-        .orderBy('created_at', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _allFoods = snapshot.docs;
-        _updatePageData();
-        _isLoading = false;
-      });
-    });
-  }
-
-  Future<void> _fetchDietCategories() async {
+  Future<String> _authServiceGetRoleSafe() async {
     try {
-      final snapshot = await _firestore
-          .collection('categories')
-          .where('type', isEqualTo: 'theo_che_do_an')
-          .get();
-      final diets = snapshot.docs.map((doc) => doc['name'].toString()).toList();
+      return await _authService.getCurrentUserRole();
+    } catch (_) {
+      return 'guest';
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          _dietCategories = diets;
-        });
+  Stream<int> unreadMessagesCount() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return Stream<int>.value(0);
+    return FirebaseFirestore.instance
+        .collection('messages')
+        .where('participants', arrayContains: currentUser.uid)
+        .snapshots()
+        .map((snapshot) {
+      int count = 0;
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final readBy = List<String>.from(data['readBy'] ?? []);
+        if (data['senderId'] != currentUser.uid &&
+            !readBy.contains(currentUser.uid)) {
+          count++;
+        }
       }
-    } catch (e) {
-      debugPrint('Failed to fetch diet categories: $e');
-    }
-  }
-
-  void _updatePageData() {
-    List<DocumentSnapshot> filtered = _allFoods.where((food) {
-      final data = food.data() as Map<String, dynamic>? ?? {};
-
-      final foodName = (data['name'] ?? '').toString().toLowerCase().trim();
-      final foodCategoryName =
-          (data['categoryName'] ?? '').toString().toLowerCase().trim();
-      final foodDietName =
-          (data['dietName'] ?? '').toString().toLowerCase().trim();
-
-      final matchesSearch =
-          searchQuery.isEmpty || foodName.contains(searchQuery.toLowerCase());
-      final matchesCategory =
-          selectedCategory.isEmpty || foodCategoryName == selectedCategory;
-      final matchesDiet = selectedDiet.isEmpty ||
-        foodDietName.toLowerCase() == selectedDiet.toLowerCase();
-
-
-      return matchesSearch && matchesCategory && matchesDiet;
-    }).toList();
-
-    _totalPages = (filtered.length / _pageSize).ceil();
-    if (_currentPage > _totalPages && _totalPages > 0) {
-      _currentPage = _totalPages;
-    }
-    if (_totalPages == 0) _currentPage = 1;
-
-    final startIndex = (_currentPage - 1) * _pageSize;
-    final endIndex = (_currentPage * _pageSize < filtered.length)
-        ? _currentPage * _pageSize
-        : filtered.length;
-    _displayFoods = filtered.sublist(startIndex, endIndex);
-  }
-
-  void _changePage(int page) {
-    if (page < 1 || page > _totalPages) return;
-    setState(() {
-      _currentPage = page;
-      _updatePageData();
+      return count;
     });
+  }
+
+    String formatNumberSmart(double? v, {int decimals = 1}) {
+    if (v == null) return '-';
+    if (v == v.roundToDouble()) return v.toInt().toString();
+    return v.toStringAsFixed(decimals);
+  }
+
+  Widget _caloItem(String title, String value, {Color? valueColor}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(fontSize: 14, color: Colors.black54)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: valueColor ?? Colors.black87),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _macroItem(String label,
+      {required int eaten, required int goal, required Color color}) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$eaten/$goal g',
+          style: TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w600, color: color),
+        ),
+      ],
+    );
+  }
+
+  // ---------- Theme colors ----------
+  static const Color pastelBackground = Color(0xFFF3F9F5);
+
+  // ---------- Feature list ----------
+  List<_Feature> get _features => [
+        const _Feature('Gợi ý thực đơn', Icons.auto_awesome, DailyMenuScreen()),
+        const _Feature('Scan món ăn', Icons.camera_alt, FoodScanScreen()),
+        const _Feature('Món đã ăn', Icons.restaurant_menu, TodayIntakeScreen()),
+        const _Feature('Món đã lưu', Icons.bookmark_rounded, SavedFoodsPage()),
+        const _Feature('Scan Calo', Icons.qr_code_scanner, CalorieScanScreen()),
+        const _Feature('Chat AI', Icons.smart_toy_rounded, ChatAIScreen()),
+      ];
+
+  // ---------- Custom header ----------
+  Widget _buildCustomHeader(String displayName) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Xin chào + tên
+        Expanded(
+          child: Text(
+            'Xin chào, $displayName!',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+
+        // Icon tin nhắn với badge
+        StreamBuilder<int>(
+          stream: unreadMessagesCount(),
+          builder: (context, snapshot) {
+            final unread = snapshot.data ?? 0;
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.message_rounded, color: Colors.black87),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AllMessagesScreen()),
+                    );
+                  },
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Colors.redAccent,
+                      child: Text(
+                        '$unread',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+
+        // Icon thông báo
+        NotificationsButton(color: Colors.black),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FBF9),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Trang chủ',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.key, color: Colors.black),
-            tooltip: "In token",
-            onPressed: _printIdToken, // 👈 gọi hàm lấy token
-          ),
-          IconButton(
-      icon: const Icon(Icons.content_copy, color: Colors.black),
-      tooltip: "Copy ID token",
-      onPressed: _printIdToken,
-    ),
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final mq = MediaQuery.of(context);
 
-          if (!_isAdmin)
-            StreamBuilder<int>(
-              stream: _msgSvc.unreadCountStream(),
-              builder: (context, snapshot) {
-                final unread = snapshot.data ?? 0;
-                return Stack(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.message, color: Colors.black87),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const AllMessagesScreen()),
-                        );
-                      },
-                    ),
-                    if (unread > 0)
-                      Positioned(
-                        right: 6,
-                        top: 6,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                              minWidth: 20, minHeight: 20),
-                          child: Text(
-                            '$unread',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold),
-                            textAlign: TextAlign.center,
+    return Scaffold(
+      backgroundColor: const Color(0xFFE7F6EB),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (currentUser != null) ...[
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+
+                    // Fallback chain:
+                    // 1) Firestore displayName nếu có và không rỗng
+                    // 2) FirebaseAuth.currentUser.displayName nếu có và không rỗng
+                    // 3) email username (phần trước @) nếu có
+                    // 4) 'bạn' mặc định
+                    String displayName = 'bạn';
+
+                    final fsName = (data['displayName'] as String?)?.trim();
+                    if (fsName != null && fsName.isNotEmpty) {
+                      displayName = fsName;
+                    } else {
+                      final authName = FirebaseAuth.instance.currentUser?.displayName?.trim();
+                      if (authName != null && authName.isNotEmpty) {
+                        displayName = authName;
+                      } else {
+                        final email = FirebaseAuth.instance.currentUser?.email;
+                        if (email != null && email.contains('@')) {
+                          displayName = email.split('@')[0];
+                        }
+                      }
+                    }
+
+                    return _buildCustomHeader(displayName);
+                  },
+                ),
+
+                const SizedBox(height: 24),
+              ],
+
+              // ===== Thông tin cơ thể + calo + macro =====
+              if (currentUser != null) ...[
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(currentUser.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final data =
+                        snapshot.data!.data() as Map<String, dynamic>? ?? {};
+                    final weight = (data['weight'] as num?)?.toDouble();
+                    final height = (data['height'] as num?)?.toDouble();
+                    final calorieGoalData =
+                        data['calorieGoal'] as Map<String, dynamic>?;
+                    final int? dailyGoal = calorieGoalData?['dailyGoal'] as int?;
+                    final int? bmr = calorieGoalData?['bmr'] as int?;
+                    final int? tdee = calorieGoalData?['tdee'] as int?;
+                    final double? bmi = (data['bmi'] as num?)?.toDouble();
+                    final int? protein = calorieGoalData?['protein'] as int?;
+                    final int? carbs = calorieGoalData?['carbs'] as int?;
+                    final int? fat = calorieGoalData?['fat'] as int?;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Card(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          elevation: 6,
+                          color: const Color.fromARGB(255, 212, 241, 222),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (weight != null && height != null)
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _caloItem(
+                                          "Cân nặng", "${formatNumberSmart(weight)} kg"),
+                                      _caloItem(
+                                          "Chiều cao", "${formatNumberSmart(height)} cm"),
+                                    ],
+                                  ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    if (bmi != null)
+                                      _caloItem("BMI", bmi.toStringAsFixed(1),
+                                          valueColor: Colors.deepPurple),
+                                    if (bmr != null)
+                                      _caloItem("BMR", "$bmr calo",
+                                          valueColor: Colors.orange),
+                                    if (tdee != null)
+                                      _caloItem("TDEE", "$tdee calo",
+                                          valueColor: Colors.green),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                if (dailyGoal != null &&
+                                    protein != null &&
+                                    carbs != null &&
+                                    fat != null)
+                                  StreamBuilder<double>(
+                                    stream: IntakeService()
+                                        .todayCaloriesTotalStream(currentUser.uid),
+                                    builder: (context, caloSnap) {
+                                      double eatenCalo = caloSnap.data ?? 0;
+                                      double remainingCalo =
+                                          (dailyGoal - eatenCalo)
+                                              .clamp(0, double.infinity);
+                                      double progress = (dailyGoal > 0)
+                                          ? (eatenCalo / dailyGoal).clamp(0, 1)
+                                          : 0;
+
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Mục tiêu dinh dưỡng hôm nay',
+                                            style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: LinearProgressIndicator(
+                                                  minHeight: 28,
+                                                  value: progress,
+                                                  backgroundColor: Colors.green
+                                                      .withAlpha(
+                                                          (0.2 * 255).round()),
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                              Positioned.fill(
+                                                child: Center(
+                                                  child: Text(
+                                                    '${eatenCalo.round()}/$dailyGoal kcal',
+                                                    style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 16),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          StreamBuilder<Map<String, double>>(
+                                            stream: IntakeService()
+                                                .todayMacrosConsumedStream(
+                                                    currentUser.uid),
+                                            builder: (context, macroSnap) {
+                                              final eatenProtein =
+                                                  macroSnap.data?['protein'] ?? 0;
+                                              final eatenCarbs =
+                                                  macroSnap.data?['carbs'] ?? 0;
+                                              final eatenFat =
+                                                  macroSnap.data?['fat'] ?? 0;
+
+                                              return Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  _macroItem(
+                                                      'Protein',
+                                                      eaten: eatenProtein.round(),
+                                                      goal: protein,
+                                                      color: Colors.purple),
+                                                  _macroItem(
+                                                      'Carbs',
+                                                      eaten: eatenCarbs.round(),
+                                                      goal: carbs,
+                                                      color: Colors.blue),
+                                                  _macroItem(
+                                                      'Fat',
+                                                      eaten: eatenFat.round(),
+                                                      goal: fat,
+                                                      color: Colors.orange),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          const NotificationsButton(),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-// 🔍 Thanh tìm kiếm + nút lọc chế độ ăn
-Row(
-  children: [
-    // Ô tìm kiếm
-    Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withValues(alpha: 0.1),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: TextField(
-          decoration: const InputDecoration(
-            hintText: 'Tìm món ăn...',
-            prefixIcon: Icon(Icons.search, color: Colors.black54),
-            border: InputBorder.none,
-            contentPadding:
-                EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          ),
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value;
-              _currentPage = 1;
-              _updatePageData();
-            });
-          },
-        ),
-      ),
-    ),
-
-    const SizedBox(width: 10),
-
-    GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (context) => Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Chọn chế độ ăn',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Tất cả'),
-                      selected: selectedDiet.isEmpty,
-                      selectedColor: Colors.green.withValues(alpha: 0.3),
-                      onSelected: (_) {
-                        setState(() {
-                          selectedDiet = '';
-                          _updatePageData();
-                        });
-                        Navigator.pop(context);
-                      },
-                    ),
-                    ..._dietCategories.map((diet) {
-                      final isSelected = selectedDiet == diet;
-                      return ChoiceChip(
-                        label: Text(diet),
-                        selected: isSelected,
-                        selectedColor: Colors.green.withValues(alpha: 0.3),
-                        onSelected: (_) {
-                          setState(() {
-                            selectedDiet = diet;
-                            _updatePageData();
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    }),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ],
-            ),
+
+              const SizedBox(height: 24),
+              const Text(
+                'Tiện ích hôm nay',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              _buildFeatureButtonsGrid(mq),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- FEATURE GRID ----------------
+  Widget _buildFeatureButtonsGrid(MediaQueryData mq) {
+    final features = _features;
+    double itemWidth = (mq.size.width - 64) / 3; // 16 padding *2 + 14*2 spacing
+    return GridView.builder(
+      itemCount: features.length,
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        childAspectRatio: itemWidth / 120, // bự hơn
+      ),
+      itemBuilder: (context, index) {
+        final f = features[index];
+        return _FeatureSquareButton(
+          title: f.title,
+          icon: f.icon,
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => f.destination)),
         );
       },
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.tune, color: Colors.green),
-      ),
-    ),
-  ],
-),
-
-
-                  const SizedBox(height: 20),
-
-                  // 🌿 Danh mục loại món
-                  SizedBox(
-                    height: 100,
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('categories')
-                          .where('type', isEqualTo: 'theo_loai_mon_an')
-                          .orderBy('createdAt', descending: false)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        final categories = snapshot.data!.docs;
-                        if (categories.isEmpty) {
-                          return const Center(
-                              child: Text('Chưa có danh mục món ăn nào.'));
-                        }
-                        return ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: categories.length,
-                          itemBuilder: (context, index) {
-                            final cat = categories[index].data()
-                                as Map<String, dynamic>;
-                            final colorInt = cat['color'] ?? 0xFFA5D6A7;
-                            final color = Color(colorInt);
-                            final iconCode = cat['icon'] ??
-                                Icons.fastfood_outlined.codePoint;
-                            final icon =
-                                IconData(iconCode, fontFamily: 'MaterialIcons');
-                            return _buildFoodCategory(
-                                cat['name'] ?? 'Danh mục', icon, color);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // 🌈 Banner giữa trang
-                  Container(
-                    height: 150,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFA5D6A7), Color(0xFF81C784)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.green.withValues(alpha:0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 20,
-                          top: 30,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                'Khám phá món mới hôm nay 🍽️',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              Text(
-                                'Ăn lành mạnh - sống năng lượng 💚',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // 📋 Danh sách món ăn
-                  ListView.builder(
-                    itemCount: _displayFoods.length + 1,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      if (index == _displayFoods.length) {
-                        return _buildPagination();
-                      }
-                      final food = _displayFoods[index];
-                      return _buildFoodCard(food);
-                    },
-                  ),
-                ],
-              ),
-            ),
     );
   }
+}
 
-  Widget _buildPagination() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(_totalPages, (i) {
-          final page = i + 1;
-          return GestureDetector(
-            onTap: () => _changePage(page),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _currentPage == page
-                    ? const Color(0xFF81C784)
-                    : Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$page',
-                style: TextStyle(
-                  color:
-                      _currentPage == page ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
+// ---------- feature square button widget ----------
+class _FeatureSquareButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _FeatureSquareButton(
+      {required this.title, required this.icon, required this.onTap});
 
-  Widget _buildFoodCard(DocumentSnapshot food) {
-    final data = food.data() as Map<String, dynamic>? ?? {};
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: ListTile(
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: (data['image_url'] ?? '').isNotEmpty
-              ? Image.network(
-                  data['image_url'],
-                  width: 60,
-                  height: 60,
-                  fit: BoxFit.cover,
-                )
-              : Container(
-                  width: 60,
-                  height: 60,
-                  color: Colors.green[100],
-                  child:
-                      const Icon(Icons.fastfood_outlined, color: Colors.green),
-                ),
-        ),
-        title: Text(
-          data['name'] ?? '',
-          style:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Text(
-          'Calo: ${data['calories'] ?? 0} kcal | Chế độ: ${data['diet'] ?? ''}',
-          style: const TextStyle(color: Colors.grey),
-        ),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => FoodDetailScreen(foodId: food.id)),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            StreamBuilder<bool>(
-              stream: _likeSvc.isLikedStream(food.id),
-              initialData: false,
-              builder: (context, s) {
-                final liked = s.data ?? false;
-                return IconButton(
-                  icon: Icon(
-                    liked ? Icons.favorite : Icons.favorite_border,
-                    color: liked ? Colors.pinkAccent : Colors.grey,
-                  ),
-                  onPressed: uid == null
-                      ? null
-                      : () => _likeSvc.toggleLike(food.id, liked),
-                );
-              },
-            ),
-            StreamBuilder<bool>(
-              stream: _likeSvc.isSavedStream(food.id),
-              initialData: false,
-              builder: (context, s) {
-                final saved = s.data ?? false;
-                return IconButton(
-                  icon: Icon(
-                    saved
-                        ? Icons.bookmark
-                        : Icons.bookmark_border_outlined,
-                    color: saved ? Colors.green : Colors.grey,
-                  ),
-                  onPressed: uid == null
-                      ? null
-                      : () => _likeSvc.toggleSave(food.id, saved),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    const Color bg = Color(0xFFEFF9F5);
+    const Color iconBg = Color(0xFFF3FBF6);
+    const Color iconColor = Color(0xFF1B8E7B);
 
-  Widget _buildFoodCategory(String categoryName, IconData icon, Color color) {
-    final isSelected = selectedCategory == categoryName;
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => FilteredFoodsScreen(categoryName: categoryName),
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 4))
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration:
+                    BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+                child: Center(child: Icon(icon, color: iconColor, size: 20)),
+              ),
+            ),
           ),
-        );
-      },
-      child: Container(
-        width: 85,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha:0.3) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha:0.1),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 6),
-            Text(
-              categoryName,
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 80,
+            child: Text(
+              title,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: isSelected
-                      ? FontWeight.bold
-                      : FontWeight.normal),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF2E2E2E)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
+
+// small model for features with concrete destination widget
+class _Feature {
+  final String title;
+  final IconData icon;
+  final Widget destination;
+  const _Feature(this.title, this.icon, this.destination);
 }
