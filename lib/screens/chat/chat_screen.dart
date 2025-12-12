@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/message_service.dart';
+import 'package:doan/widgets/message_bubble.dart'; // import MessageBubble
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -21,9 +22,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-  final _msgSvc = MessageService(); // ✅ Gọi service dùng chung
+  final _msgSvc = MessageService();
 
-  /// Gửi tin nhắn
   Future<void> _sendMessage() async {
     final user = _auth.currentUser!;
     final text = _controller.text.trim();
@@ -36,13 +36,12 @@ class _ChatScreenState extends State<ChatScreen> {
       'senderName': user.displayName ?? 'Người dùng',
       'timestamp': FieldValue.serverTimestamp(),
       'participants': [user.uid, widget.receiverId],
-      'readBy': [user.uid], // người gửi tự đọc
+      'readBy': [user.uid],
     });
 
     _controller.clear();
   }
 
-  /// ✅ Khi mở Chat, đánh dấu tin nhắn từ người kia là đã đọc
   @override
   void initState() {
     super.initState();
@@ -54,14 +53,17 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUser = _auth.currentUser!;
+    final theme = Theme.of(context);
+    final primary = theme.primaryColor;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("Chat với ${widget.receiverName}"),
-        backgroundColor: Colors.orange,
+        title: Text(widget.receiverName),
+        backgroundColor: primary,
+        elevation: 1,
       ),
       body: Column(
         children: [
-          // 🔹 Danh sách tin nhắn
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _firestore
@@ -88,6 +90,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
                 return ListView.builder(
                   reverse: true,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final data = messages[index].data();
@@ -95,72 +99,48 @@ class _ChatScreenState extends State<ChatScreen> {
                     final timestamp =
                         (data['timestamp'] as Timestamp?)?.toDate() ??
                             DateTime.now();
-                    final formattedTime =
-                        "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
 
-                    return Container(
-                      alignment:
-                          isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 12),
-                      child: Column(
-                        crossAxisAlignment: isMe
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['senderName'] ?? '',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey),
-                          ),
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isMe
-                                  ? Colors.orange.shade100
-                                  : Colors.grey.shade200,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(data['text'] ?? ''),
-                                const SizedBox(height: 4),
-                                Text(
-                                  formattedTime,
-                                  style: const TextStyle(
-                                      fontSize: 10, color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    return MessageBubble(
+                      message: data['text'] ?? '',
+                      isMe: isMe,
+                      userId: data['senderId'] ?? '',
+                      username: data['senderName'] ?? 'Người dùng',
+                      timestamp: timestamp,
                     );
                   },
                 );
               },
             ),
           ),
-
-          // 🔹 Thanh nhập tin nhắn
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: Colors.white,
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Nhập tin nhắn...',
-                      border: OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      fillColor: Colors.grey.shade100,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.orange),
-                  onPressed: _sendMessage,
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _sendMessage,
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundColor: primary,
+                    child: const Icon(Icons.send, color: Colors.white),
+                  ),
                 ),
               ],
             ),

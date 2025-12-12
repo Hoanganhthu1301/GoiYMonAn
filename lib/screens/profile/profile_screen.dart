@@ -10,9 +10,8 @@ import '../../services/follow_service.dart';
 import '../../services/fcm_token_service.dart';
 import '../chat/chat_screen.dart';
 import '../food/add_food_page.dart';
-import '../../services/calorie_service.dart';
-import '../../services/intake_service.dart';
-import '../articles/articles_screen.dart';
+import 'package:provider/provider.dart';
+import '../../main.dart'; // hoặc file nào chứa ThemeNotifier
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -27,7 +26,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   String? get currentUserId => FirebaseAuth.instance.currentUser?.uid;
   final _followSvc = FollowService();
 
-  // Màu chủ đạo xanh lá, tone hiện đại
+  // Màu chủ đạo xanh lá, tone hiện đại (giữ nguyên để không phá cấu trúc cũ)
   static const Color primaryGreen = Color(0xFF4CAF50);
   static const Color softGreen = Color(0xFFE8F5E9);
   static const Color chipGreen = Color(0xFFA5D6A7);
@@ -196,21 +195,37 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    const background = softGreen;
-    const cardBg = Colors.white;
-    const borderColor = Color(0xFFE0E0E0);
-    const primaryText = Colors.black87;
-    const secondaryText = Colors.black54;
+    // theme-aware colors with explicit dark-mode handling
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Choose palette: use theme where possible, fallback to tuned dark colors
+    final background = theme.colorScheme.background;
+    final cardBg = isDark ? const Color(0xFF0F1720) : theme.cardColor;
+    final borderColor = isDark ? Colors.grey.shade800 : theme.dividerColor;
+    final primaryText = isDark
+        ? Colors.white70
+        : theme.textTheme.bodyLarge?.color ?? Colors.black87;
+    final secondaryText = isDark
+        ? Colors.white60
+        : theme.textTheme.bodyMedium?.color ?? Colors.black54;
+
+    final primaryGreenTheme = theme.colorScheme.primary;
+    final chipBgDark = const Color(0x1A81C784); // subtle dark chip tint (hex with alpha)
+    final chipGreenTheme = isDark ? chipBgDark : theme.colorScheme.primary.withOpacity(0.15);
+    final dangerRedTheme = theme.colorScheme.error;
+    final iconColor = isDark ? Colors.white70 : theme.iconTheme.color ?? primaryText;
+    final placeholderBg = isDark ? Colors.grey.shade900 : theme.dividerColor.withOpacity(0.08);
 
     final size = MediaQuery.of(context).size;
     return Scaffold(
       backgroundColor: background,
-      drawer: _isCurrentUser ? _buildDrawer() : null, // Drawer chỉ mình thấy
+      drawer: _isCurrentUser ? _buildDrawer() : null,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cardBg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: primaryText),
-        title: const Text(
+        iconTheme: IconThemeData(color: iconColor),
+        title: Text(
           "Trang cá nhân",
           style: TextStyle(
             color: primaryText,
@@ -232,18 +247,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                   await _loadStats();
                 }
               },
-              icon: const Icon(Icons.add_circle_outline),
+              icon: Icon(Icons.add_circle_outline, color: iconColor),
             ),
-          IconButton(
-            tooltip: 'Đăng xuất',
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-          ),
+          // IconButton(
+          //   tooltip: 'Đăng xuất',
+          //   onPressed: _logout,
+          //   icon: Icon(Icons.logout, color: iconColor),
+          // ),
         ],
-    ),
+      ),
       body: RefreshIndicator(
         onRefresh: _refreshAll,
-        color: primaryGreen,
+        color: primaryGreenTheme,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -253,8 +268,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_userData == null)
-              const Padding(
-                padding: EdgeInsets.all(24),
+              Padding(
+                padding: const EdgeInsets.all(24),
                 child: Center(
                   child: Text(
                     'Không tìm thấy người dùng.',
@@ -279,17 +294,17 @@ class _ProfileScreenState extends State<ProfileScreen>
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cardBg,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: borderColor),
               ),
               child: TabBar(
                 controller: _tabController,
                 indicator: BoxDecoration(
-                  color: primaryGreen,
+                  color: primaryGreenTheme,
                   borderRadius: BorderRadius.circular(24),
                 ),
-                labelColor: Colors.white,
+                labelColor: isDark ? Colors.black : Colors.white,
                 unselectedLabelColor: primaryText,
                 labelStyle: const TextStyle(
                   fontWeight: FontWeight.w600,
@@ -340,605 +355,417 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
+
   String _bmiStatusText(num bmi) {
     if (bmi < 18.5) return 'Thiếu cân';
-    if (bmi < 23) return 'Bình thường';        // chuẩn châu Á
+    if (bmi < 23) return 'Bình thường'; // chuẩn châu Á
     if (bmi < 27.5) return 'Thừa cân';
     return 'Béo phì';
   }
 
-Widget _buildProfileHeader(
-  BuildContext context,
-  Map<String, dynamic> userData,
-  bool isCurrentUser,
-  Color cardBg,
-  Color borderColor,
-  Color primaryText,
-  Color secondaryText,
-) {
-  // Avatar
-  final photoURL = (userData['photoURL']?.toString().trim().isNotEmpty ?? false)
-      ? userData['photoURL'].toString()
-      : defaultAvatarUrl;
+  Widget _buildProfileHeader(
+    BuildContext context,
+    Map<String, dynamic> userData,
+    bool isCurrentUser,
+    Color cardBg,
+    Color borderColor,
+    Color primaryText,
+    Color secondaryText,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryGreenTheme = theme.colorScheme.primary;
+    final avatarBg = isDark ? Colors.grey.shade800 : theme.dividerColor;
 
-  // Tên hiển thị với fallback
-   // Tên hiển thị với fallback chain:
-  // 1) Firestore displayName
-  // 2) FirebaseAuth.currentUser.displayName
-  // 3) email username (phần trước @)
-  // 4) default 'Tên người dùng'
-  final fsName = (userData['displayName'] as String?)?.trim();
-  String displayName;
-  if (fsName != null && fsName.isNotEmpty) {
-    displayName = fsName;
-  } else {
-    final authName = FirebaseAuth.instance.currentUser?.displayName?.trim();
-    if (authName != null && authName.isNotEmpty) {
-      displayName = authName;
+    // Avatar
+    final photoURL = (userData['photoURL']?.toString().trim().isNotEmpty ?? false)
+        ? userData['photoURL'].toString()
+        : defaultAvatarUrl;
+
+    // Tên hiển thị với fallback
+    final fsName = (userData['displayName'] as String?)?.trim();
+    String displayName;
+    if (fsName != null && fsName.isNotEmpty) {
+      displayName = fsName;
+    } else {
+      final authName = FirebaseAuth.instance.currentUser?.displayName?.trim();
+      if (authName != null && authName.isNotEmpty) {
+        displayName = authName;
+      } else {
+        final email = FirebaseAuth.instance.currentUser?.email;
+        if (email != null && email.contains('@')) {
+          displayName = email.split('@')[0];
+        } else {
+          displayName = 'Tên người dùng';
+        }
+      }
+    }
+
+    // Username
+    final fsUsername = (userData['username'] as String?)?.trim();
+    String username;
+    if (fsUsername != null && fsUsername.isNotEmpty) {
+      username = '@$fsUsername';
     } else {
       final email = FirebaseAuth.instance.currentUser?.email;
       if (email != null && email.contains('@')) {
-        displayName = email.split('@')[0];
+        username = '@' + email.split('@')[0];
       } else {
-        displayName = 'Tên người dùng';
+        username = '';
       }
     }
-  }
 
-  // Username: ưu tiên trường username trong Firestore, nếu không có
-  // thì dùng @ + email-username (nếu có), hoặc để rỗng.
-  final fsUsername = (userData['username'] as String?)?.trim();
-  String username;
-  if (fsUsername != null && fsUsername.isNotEmpty) {
-    username = '@$fsUsername';
-  } else {
-    final email = FirebaseAuth.instance.currentUser?.email;
-    if (email != null && email.contains('@')) {
-      username = '@' + email.split('@')[0];
-    } else {
-      username = '';
-    }
-  }
+    // Bio
+    final bio = (userData['bio']?.toString().trim().isNotEmpty ?? false)
+        ? userData['bio'].toString()
+        : '';
 
-  // Bio với fallback
-  final bio = (userData['bio']?.toString().trim().isNotEmpty ?? false)
-      ? userData['bio'].toString()
-      : '';
-
-  return Container(
-    margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: cardBg,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black12.withOpacity(0.03),
-          blurRadius: 8,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Avatar + name + actions
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 36,
-              backgroundImage: NetworkImage(photoURL),
-              backgroundColor: Colors.grey.shade200,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (username.isNotEmpty)
-                    Text(
-                      username,
-                      style: TextStyle(
-                        color: secondaryText,
-                        fontSize: 13,
-                      ),
-                    ),
-                  if (bio.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      bio,
-                      style: TextStyle(
-                        color: secondaryText,
-                        fontSize: 13,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),  
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // Stats
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _statColumn(
-                _loadingStats ? null : _followersCount,
-                'Người theo dõi',
-                primaryText,
-                secondaryText),
-            _statColumn(
-                _loadingStats ? null : _followingCount,
-                'Đang theo dõi',
-                primaryText,
-                secondaryText),
-            _statColumn(
-                _loadingStats ? null : _postsCount,
-                'Bài viết',
-                primaryText,
-                secondaryText),
-          ],
-        ),
-
-        const SizedBox(height: 14),
-
-        // Buttons
-        if (!isCurrentUser)
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: currentUserId == null
-                      ? null
-                      : () async {
-                          try {
-                            if (_isFollowing) {
-                              await _followSvc.unfollow(widget.userId);
-                            } else {
-                              await _followSvc.follow(widget.userId);
-                            }
-                            await _loadStats();
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Lỗi: $e')),
-                            );
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isFollowing
-                        ? Colors.grey.shade200
-                        : primaryGreen,
-                    foregroundColor:
-                        _isFollowing ? primaryText : Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  child: Text(_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    if (currentUserId == null) return;
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          receiverId: widget.userId,
-                          receiverName: displayName,
-                        ),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primaryText,
-                    side: BorderSide(
-                      color: primaryGreen.withOpacity(0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  child: const Text("Nhắn tin"),
-                ),
-              ),
-            ],
-          )
-        else
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditProfileScreen(userId: widget.userId),
-                  ),
-                );
-                if (mounted) await _loadUser();
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: primaryGreen,
-                side: const BorderSide(color: primaryGreen),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              child: const Text('Chỉnh sửa hồ sơ'),
-            ),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
-      ],
-    ),
-  );
-
-  }
-
-
-Widget _buildOverviewTab(
-  Color cardBg,
-  Color borderColor,
-  Color primaryText,
-  Color secondaryText,
-) {
-  if (_userData == null) {
-    return const Center(child: Text('Đang tải...'));
-  }
-
-  final uid = widget.userId;
-
-  // Lấy dữ liệu từ Firestore
-  final double? weight =
-      (_userData!['weight'] as num?)?.toDouble();        // kg
-  final double? height =
-      (_userData!['height'] as num?)?.toDouble();        // cm
-  final int? age = (_userData!['age'] as num?)?.toInt();
-  final String? gender = _userData!['gender'] as String?;
-  final double? bmi = (_userData!['bmi'] as num?)?.toDouble();
-  final double? targetWeight =
-      (_userData!['targetWeight'] as num?)?.toDouble();
-  final String? dietType = _userData!['dietType'] as String?;
-  final String? goal = _userData!['goal'] as String?;
-
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    child: SingleChildScrollView(
-      primary: false, 
-    physics: const BouncingScrollPhysics(),
+        ],
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thẻ thống kê calo
-          // _buildCalorieCard(uid, cardBg, borderColor),
-          const SizedBox(height: 16),
-
-          // ====== THÔNG TIN CƠ BẢN ======
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Thông tin cá nhân",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _infoChip(
-                      icon: Icons.monitor_weight,
-                      label: 'Cân nặng',
-                      value: weight != null ? '${weight.toStringAsFixed(1)} kg' : 'Chưa cập nhật',
-                    ),
-                    const SizedBox(width: 8),
-                    _infoChip(
-                      icon: Icons.height,
-                      label: 'Chiều cao',
-                      value: height != null ? '${height.toStringAsFixed(1)} cm' : 'Chưa cập nhật',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _infoChip(
-                      icon: Icons.cake,
-                      label: 'Tuổi',
-                      value: age != null ? '$age tuổi' : 'Chưa cập nhật',
-                    ),
-                    const SizedBox(width: 8),
-                    _infoChip(
-                      icon: Icons.person,
-                      label: 'Giới tính',
-                      value: gender ?? 'Chưa cập nhật',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ====== BMI + CÂN NẶNG MỤC TIÊU ======
-          if (bmi != null || targetWeight != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+          // Avatar + name + actions
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundImage: NetworkImage(photoURL),
+                backgroundColor: avatarBg,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Chỉ số cơ thể",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (bmi != null) ...[
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'BMI: ${bmi.toStringAsFixed(1)} – ${_bmiStatusText(bmi)}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      displayName,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: primaryText,
                       ),
                     ),
                     const SizedBox(height: 4),
+                    if (username.isNotEmpty)
+                      Text(
+                        username,
+                        style: TextStyle(
+                          color: secondaryText,
+                          fontSize: 13,
+                        ),
+                      ),
+                    if (bio.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        bio,
+                        style: TextStyle(
+                          color: secondaryText,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ],
-                  if (targetWeight != null)
-                    Text(
-                      'Cân nặng mục tiêu: ${targetWeight.toStringAsFixed(1)} kg',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                ],
+                ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 12),
 
-          const SizedBox(height: 16),
+          // Stats
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _statColumn(
+                  _loadingStats ? null : _followersCount,
+                  'Người theo dõi',
+                  primaryText,
+                  secondaryText),
+              _statColumn(
+                  _loadingStats ? null : _followingCount,
+                  'Đang theo dõi',
+                  primaryText,
+                  secondaryText),
+              _statColumn(
+                  _loadingStats ? null : _postsCount,
+                  'Bài viết',
+                  primaryText,
+                  secondaryText),
+            ],
+          ),
 
-          // ====== MỤC TIÊU & CHẾ ĐỘ ĂN ======
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 14),
+
+          // Buttons
+          if (!isCurrentUser)
+            Row(
               children: [
-                const Text(
-                  "Mục tiêu & chế độ ăn",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: currentUserId == null
+                        ? null
+                        : () async {
+                            try {
+                              if (_isFollowing) {
+                                await _followSvc.unfollow(widget.userId);
+                              } else {
+                                await _followSvc.follow(widget.userId);
+                              }
+                              await _loadStats();
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Lỗi: $e')),
+                              );
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isFollowing
+                          ? Theme.of(context).disabledColor
+                          : Theme.of(context).colorScheme.primary,
+                      foregroundColor: _isFollowing
+                          ? Theme.of(context).textTheme.bodyLarge?.color
+                          : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    child: Text(_isFollowing ? 'Đang theo dõi' : 'Theo dõi'),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _infoChip(
-                      icon: Icons.flag,
-                      label: 'Mục tiêu',
-                      value: goal ?? 'Chưa cập nhật',
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      if (currentUserId == null) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(
+                            receiverId: widget.userId,
+                            receiverName: displayName,
+                          ),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryText,
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
-                    const SizedBox(width: 8),
-                    _infoChip(
-                      icon: Icons.restaurant_menu,
-                      label: 'Chế độ ăn',
-                      value: dietType ?? 'Chưa cập nhật',
-                    ),
-                  ],
+                    child: Text("Nhắn tin"),
+                  ),
                 ),
               ],
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProfileScreen(userId: widget.userId),
+                    ),
+                  );
+                  if (mounted) await _loadUser();
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                child: const Text('Chỉnh sửa hồ sơ'),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
+  Widget _buildOverviewTab(
+    Color cardBg,
+    Color borderColor,
+    Color primaryText,
+    Color secondaryText,
+  ) {
+    if (_userData == null) return const Center(child: CircularProgressIndicator());
 
-  // Widget _buildCalorieCard(
-  //   String uid,
-  //   Color cardBg,
-  //   Color borderColor,
-  // ) {
-  //   return StreamBuilder<int?>(
-  //     stream: CalorieService.instance.dailyGoalStream(),
-  //     builder: (context, goalSnap) {
-  //       if (goalSnap.connectionState == ConnectionState.waiting) {
-  //         return const Padding(
-  //           padding: EdgeInsets.all(8),
-  //           child: LinearProgressIndicator(),
-  //         );
-  //       }
+    final weight = (_userData!['weight'] as num?)?.toDouble();
+    final height = (_userData!['height'] as num?)?.toDouble();
+    final age = (_userData!['age'] as num?)?.toInt();
+    final gender = (_userData!['gender'] as String?);
+    final bmi = (_userData!['bmi'] as num?)?.toDouble();
+    final targetWeight = (_userData!['targetWeight'] as num?)?.toDouble();
+    final dietType = (_userData!['dietType'] as String?);
+    final goal = (_userData!['goal'] as String?);
 
-  //       final int? dailyGoalVal = goalSnap.data;
-  //       if (dailyGoalVal == null || dailyGoalVal == 0) {
-  //         return Container(
-  //           padding: const EdgeInsets.all(14),
-  //           decoration: BoxDecoration(
-  //             color: cardBg,
-  //             borderRadius: BorderRadius.circular(16),
-  //             border: Border.all(color: borderColor),
-  //           ),
-  //           child: const Text(
-  //             "Bạn chưa thiết lập mục tiêu calo.\nHãy vào cài đặt để thêm mục tiêu.",
-  //             style: TextStyle(fontSize: 14),
-  //           ),
-  //         );
-  //       }
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final chipBg = isDark ? Colors.white10 : theme.colorScheme.primary.withOpacity(0.06);
 
-  //       final int dailyGoal = dailyGoalVal;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Thông tin cơ bản
+            _infoCard(
+              title: 'Thông tin cơ bản',
+              children: [
+                _infoTile(icon: Icons.monitor_weight, label: 'Cân nặng', value: weight != null ? '${weight.toStringAsFixed(1)} kg' : 'Chưa cập nhật'),
+                _infoTile(icon: Icons.height, label: 'Chiều cao', value: height != null ? '${height.toStringAsFixed(1)} cm' : 'Chưa cập nhật'),
+                _infoTile(icon: Icons.cake, label: 'Tuổi', value: age != null ? '$age tuổi' : 'Chưa cập nhật'),
+                _infoTile(icon: Icons.person, label: 'Giới tính', value: gender ?? 'Chưa cập nhật'),
+              ],
+            ),
 
-  //       return StreamBuilder<double>(
-  //         stream: IntakeService().todayCaloriesTotalStream(uid),
-  //         builder: (context, intakeSnap) {
-  //           final consumed = intakeSnap.data ?? 0.0;
-  //           final remaining = (dailyGoal - consumed).clamp(0, 99999);
-  //           final percentage = (consumed / dailyGoal * 100).clamp(0, 100);
+            const SizedBox(height: 12),
 
-  //           Color barColor;
-  //           if (percentage < 70) {
-  //             barColor = primaryGreen;
-  //           } else if (percentage < 100) {
-  //             barColor = Colors.orange;
-  //           } else {
-  //             barColor = dangerRed;
-  //           }
+            // BMI & mục tiêu cân nặng
+            _infoCard(
+              title: 'Chỉ số cơ thể',
+              children: [
+                if (bmi != null) _infoTile(icon: Icons.monitor_weight, label: 'BMI', value: '${bmi.toStringAsFixed(1)} – ${_bmiStatusText(bmi)}'),
+                if (targetWeight != null) _infoTile(icon: Icons.flag, label: 'Cân nặng mục tiêu', value: '${targetWeight.toStringAsFixed(1)} kg'),
+              ],
+            ),
 
-  //           return Container(
-  //             padding: const EdgeInsets.all(16),
-  //             decoration: BoxDecoration(
-  //               gradient: const LinearGradient(
-  //                 colors: [softGreen, Colors.white],
-  //                 begin: Alignment.topLeft,
-  //                 end: Alignment.bottomRight,
-  //               ),
-  //               borderRadius: BorderRadius.circular(16),
-  //               border: Border.all(color: borderColor),
-  //             ),
-  //             child: Column(
-  //               crossAxisAlignment: CrossAxisAlignment.start,
-  //               children: [
-  //                 const Text(
-  //                   "Thống kê calo hôm nay",
-  //                   style: TextStyle(
-  //                     fontWeight: FontWeight.w600,
-  //                     fontSize: 16,
-  //                   ),
-  //                 ),
-  //                 const SizedBox(height: 12),
-  //                 ClipRRect(
-  //                   borderRadius: BorderRadius.circular(10),
-  //                   child: LinearProgressIndicator(
-  //                     value: percentage / 100,
-  //                     minHeight: 10,
-  //                     backgroundColor: Colors.grey.shade200,
-  //                     valueColor: AlwaysStoppedAnimation(barColor),
-  //                   ),
-  //                 ),
-  //                 const SizedBox(height: 10),
-  //                 Row(
-  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                   children: [
-  //                     _caloItem(
-  //                       title: "Mục tiêu",
-  //                       value: "$dailyGoal kcal",
-  //                       align: CrossAxisAlignment.start,
-  //                     ),
-  //                     _caloItem(
-  //                       title: "Đã ăn",
-  //                       value: "${consumed.round()} kcal",
-  //                       align: CrossAxisAlignment.center,
-  //                     ),
-  //                     _caloItem(
-  //                       title: "Còn lại",
-  //                       value: "${remaining.round()} kcal",
-  //                       align: CrossAxisAlignment.end,
-  //                       valueColor: primaryGreen,
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ],
-  //             ),
-  //           );
-  //         },
-  //       );
-  //     },
-  //   );
-  // }
+            const SizedBox(height: 12),
 
-  // Widget _caloItem({
-  //   required String title,
-  //   required String value,
-  //   CrossAxisAlignment align = CrossAxisAlignment.start,
-  //   Color? valueColor,
-  // }) {
-  //   return Expanded(
-  //     child: Column(
-  //       crossAxisAlignment: align,
-  //       children: [
-  //         Text(
-  //           title,
-  //           style: const TextStyle(fontSize: 12, color: Colors.black54),
-  //         ),
-  //         const SizedBox(height: 2),
-  //         Text(
-  //           value,
-  //           style: TextStyle(
-  //             fontWeight: FontWeight.bold,
-  //             color: valueColor ?? Colors.black87,
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
+            // Mục tiêu & chế độ ăn
+            _infoCard(
+              title: 'Mục tiêu & chế độ ăn',
+              children: [
+                _infoTile(icon: Icons.flag, label: 'Mục tiêu', value: goal ?? 'Chưa cập nhật'),
+                _infoTile(icon: Icons.restaurant_menu, label: 'Chế độ ăn', value: dietType ?? 'Chưa cập nhật'),
+              ],
+            ),
 
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Card chung cho Overview
+  Widget _infoCard({required String title, required List<Widget> children}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF0B1220) : theme.cardColor;
+    final textColor = theme.textTheme.bodyLarge?.color ?? (isDark ? Colors.white70 : Colors.black87);
+
+    return Card(
+      color: cardColor,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: textColor)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: children,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Tile gọn cho từng thông tin
+  Widget _infoTile({required IconData icon, required String label, required String value}) {
+    final theme = Theme.of(context);
+    final iconC = theme.colorScheme.primary;
+    final labelColor = theme.textTheme.bodyMedium?.color ?? (theme.brightness == Brightness.dark ? Colors.white60 : Colors.black54);
+    final valueColor = theme.textTheme.bodyLarge?.color ?? (theme.brightness == Brightness.dark ? Colors.white70 : Colors.black87);
+
+    return SizedBox(
+      width: 150,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: iconC),
+              const SizedBox(width: 6),
+              Flexible(child: Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: valueColor))),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 12, color: labelColor)),
+        ],
+      ),
+    );
+  }
+
+  // ================== INFO CHIP ==================
   Widget _infoChip({
     required IconData icon,
     required String label,
     required String value,
   }) {
+    final theme = Theme.of(context);
+    final chipBgColor = theme.brightness == Brightness.dark ? Colors.white10 : theme.colorScheme.primary.withOpacity(0.08);
+    final iconC = theme.colorScheme.primary;
+    final labelColor = theme.textTheme.bodyMedium?.color ?? Colors.black54;
+    final valueColor = theme.textTheme.bodyLarge?.color ?? Colors.black87;
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: chipGreen.withValues(alpha: 0.3),
+          color: chipBgColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: primaryGreen),
+            Icon(icon, size: 18, color: iconC),
             const SizedBox(width: 6),
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(label,
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.black54)),
+                      style: TextStyle(
+                          fontSize: 11, color: labelColor)),
                   Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      color: valueColor,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -950,8 +777,12 @@ Widget _buildOverviewTab(
       ),
     );
   }
+
   // ================== TAB BÀI VIẾT (MÓN ĂN) ==================
   Widget _buildPostsTab(Color secondaryText) {
+    final theme = Theme.of(context);
+    final placeholderBg = theme.brightness == Brightness.dark ? Colors.grey.shade900 : theme.dividerColor.withOpacity(0.08);
+
     if (_loadingPosts) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1000,9 +831,9 @@ Widget _buildOverviewTab(
                           imageUrl,
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) =>
-                              Container(color: Colors.grey.shade200),
+                              Container(color: placeholderBg),
                         )
-                      : Container(color: Colors.grey.shade200),
+                      : Container(color: placeholderBg),
                   if (isOwner)
                     Positioned(
                       top: 4,
@@ -1019,13 +850,19 @@ Widget _buildOverviewTab(
   }
 
   Widget _buildPostMenu(String foodId, Map<String, dynamic> data) {
+    final theme = Theme.of(context);
+    final overlayColor = theme.colorScheme.onBackground.withOpacity(0.45);
+    final popupBg = theme.cardColor;
+    final popupTextColor = theme.textTheme.bodyLarge?.color ?? (theme.brightness == Brightness.dark ? Colors.white70 : Colors.black87);
+    final deleteColor = theme.colorScheme.error;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Material(
-        color: Colors.black45,
+        color: overlayColor,
         child: PopupMenuButton<String>(
-          color: Colors.white,
-          icon: const Icon(Icons.more_vert, size: 18, color: Colors.white),
+          color: popupBg,
+          icon: Icon(Icons.more_vert, size: 18, color: theme.colorScheme.onPrimary),
           elevation: 4,
           onSelected: (value) async {
             if (value == 'edit') {
@@ -1043,16 +880,16 @@ Widget _buildOverviewTab(
               await _deleteFood(foodId);
             }
           },
-          itemBuilder: (ctx) => const [
+          itemBuilder: (ctx) => [
             PopupMenuItem(
               value: 'edit',
-              child: Text('Sửa'),
+              child: Text('Sửa', style: TextStyle(color: popupTextColor)),
             ),
             PopupMenuItem(
               value: 'delete',
               child: Text(
                 'Xóa',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: deleteColor),
               ),
             ),
           ],
@@ -1086,214 +923,63 @@ Widget _buildOverviewTab(
 
   // ================== DRAWER (DÀNH CHO MÌNH) ==================
   Widget _buildDrawer() {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final iconColor = theme.iconTheme.color ?? theme.textTheme.bodyLarge?.color ?? (theme.brightness == Brightness.dark ? Colors.white70 : Colors.black87);
+    final card = theme.cardColor;
+    final error = theme.colorScheme.error;
+    final accent = theme.colorScheme.secondary;
+
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: card,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(
-              color: primaryGreen,
-            ),
+            decoration: BoxDecoration(color: primary),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Text(
+                Text(
                   'Trang cá nhân',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: theme.colorScheme.onPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   FirebaseAuth.instance.currentUser?.email ?? 'Người dùng',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  style: TextStyle(color: theme.colorScheme.onPrimary.withOpacity(0.9), fontSize: 13),
                 ),
               ],
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.article, color: primaryGreen),
-            title: const Text('Bài viết của tôi'),
+            leading: Icon(Icons.light_mode, color: accent),
+            title: Text('Chế độ sáng/tối', style: TextStyle(color: iconColor)),
             onTap: () {
+              context.read<ThemeNotifier>().toggleTheme();
               Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ArticlesScreen()),
-              );
             },
           ),
           ListTile(
-            leading: const Icon(Icons.people, color: Colors.blue),
-            title: const Text('Người theo dõi'),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$_followersCount',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-            ),
-            onTap: () {
-              Navigator.pop(context);
-              _showFollowersList();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_add, color: Colors.green),
-            title: const Text('Đang theo dõi'),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$_followingCount',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-            ),
-            onTap: () {
-              Navigator.pop(context);
-              _showFollowingList();
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.info, color: Colors.grey),
-            title: const Text('Thông tin ứng dụng'),
+            leading: Icon(Icons.info, color: iconColor),
+            title: Text('Thông tin ứng dụng', style: TextStyle(color: iconColor)),
             onTap: () {
               Navigator.pop(context);
               _showAboutDialog();
             },
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showFollowersList() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Người theo dõi'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('follows')
-                .where('followingId', isEqualTo: widget.userId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final docs = snapshot.data?.docs ?? [];
-              if (docs.isEmpty) {
-                return const Center(child: Text('Chưa có người theo dõi'));
-              }
-              return ListView.builder(
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final followerId = docs[index]['followerId'];
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(followerId)
-                        .get(),
-                    builder: (context, snap) {
-                      if (!snap.hasData) return const SizedBox.shrink();
-                      final userData =
-                          snap.data!.data() as Map<String, dynamic>;
-                      return ListTile(
-                        title: Text(userData['displayName'] ?? 'User'),
-                        subtitle: Text(
-                          userData['email'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
+          ListTile(
+            leading: Icon(Icons.logout, color: error),
+            title: Text('Đăng xuất', style: TextStyle(color: iconColor)),
+            onTap: () {
+              Navigator.pop(context);
+              _logout();
             },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showFollowingList() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Đang theo dõi'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('follows')
-                .where('followerId', isEqualTo: widget.userId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final docs = snapshot.data?.docs ?? [];
-              if (docs.isEmpty) {
-                return const Center(child: Text('Chưa theo dõi ai'));
-              }
-              return ListView.builder(
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final followingId = docs[index]['followingId'];
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(followingId)
-                        .get(),
-                    builder: (context, snap) {
-                      if (!snap.hasData) return const SizedBox.shrink();
-                      final userData =
-                          snap.data!.data() as Map<String, dynamic>;
-                      return ListTile(
-                        title: Text(userData['displayName'] ?? 'User'),
-                        subtitle: Text(
-                          userData['email'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
           ),
         ],
       ),
@@ -1301,20 +987,55 @@ Widget _buildOverviewTab(
   }
 
   void _showAboutDialog() {
+    final theme = Theme.of(context);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Thông tin ứng dụng'),
-        content: const Text(
-          'Ứng dụng tính calo và gợi ý thực đơn.\n\n'
-          'Giúp bạn quản lý lượng calo hàng ngày '
-          'và nhận gợi ý món ăn phù hợp.\n\n'
-          'Phiên bản 1.0',
+        backgroundColor: theme.cardColor,
+        title: Row(
+          children: [
+            const Icon(Icons.restaurant_menu, size: 40),
+            const SizedBox(width: 10),
+            const Text('SupLo App'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ứng dụng quản lý món ăn và dinh dưỡng.\n'
+              'Giúp theo dõi lượng calo, quản lý thực đơn và khám phá các món ăn mới.',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Phiên bản: 1.0.0',
+              style: TextStyle(color: theme.textTheme.bodyMedium?.color ?? Colors.black54),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '© 2025 SupLo App. All rights reserved.',
+              style: TextStyle(color: theme.textTheme.bodyMedium?.color ?? Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: () {
+                // mở email hoặc website
+              },
+              child: Text(
+                'Liên hệ: suplo@foodapp.com',
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
+            child: Text('Đóng', style: TextStyle(color: theme.colorScheme.primary)),
           ),
         ],
       ),

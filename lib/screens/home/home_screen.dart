@@ -25,8 +25,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late AuthService _authService;
   String _currentUserRole = 'guest';
-  bool get _isAdmin => _currentUserRole == 'admin';
-
 
   @override
   void initState() {
@@ -46,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String> _authServiceGetRoleSafe() async {
-
     try {
       return await _authService.getCurrentUserRole();
     } catch (_) {
@@ -75,26 +72,26 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-    String formatNumberSmart(double? v, {int decimals = 1}) {
+  String formatNumberSmart(double? v, {int decimals = 1}) {
     if (v == null) return '-';
     if (v == v.roundToDouble()) return v.toInt().toString();
     return v.toStringAsFixed(decimals);
   }
 
   Widget _caloItem(String title, String value, {Color? valueColor}) {
+    final theme = Theme.of(context);
+    final labelColor = theme.textTheme.bodySmall?.color ?? Colors.black54;
+    final valColor = valueColor ?? theme.textTheme.bodyLarge?.color ?? Colors.black87;
+
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(fontSize: 14, color: Colors.black54)),
+          Text(title, style: TextStyle(fontSize: 14, color: labelColor)),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: valueColor ?? Colors.black87),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: valColor),
           ),
         ],
       ),
@@ -103,11 +100,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _macroItem(String label,
       {required int eaten, required int goal, required Color color}) {
+    final theme = Theme.of(context);
+    final labelColor = theme.textTheme.bodySmall?.color ?? Colors.black54;
+
     return Column(
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: labelColor),
         ),
         const SizedBox(height: 4),
         Text(
@@ -118,9 +118,41 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+Widget _macroProgressRow({
+  required String label,
+  required int eaten,
+  required int goal,
+  required Color color,
+}) {
+  final theme = Theme.of(context);
+  final textPrimary = theme.textTheme.bodyLarge?.color;
+  final textSecondary = theme.textTheme.bodyMedium?.color;
+  final safeGoal = (goal <= 0) ? 1 : goal; // tránh chia cho 0
+  final progress = (eaten / safeGoal).clamp(0.0, 1.0);
 
-  // ---------- Theme colors ----------
-  static const Color pastelBackground = Color(0xFFF3F9F5);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
+          Text('$eaten / $goal g', style: TextStyle(fontSize: 13, color: textSecondary)),
+        ],
+      ),
+      const SizedBox(height: 6),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: LinearProgressIndicator(
+          minHeight: 10,
+          value: progress,
+          backgroundColor: color.withOpacity(0.18),
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      ),
+    ],
+  );
+}
 
   // ---------- Feature list ----------
   List<_Feature> get _features => [
@@ -134,6 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ---------- Custom header ----------
   Widget _buildCustomHeader(String displayName) {
+    final theme = Theme.of(context);
+    final textColor = theme.textTheme.headlineSmall?.color ?? Colors.black87;
+    final iconColor = theme.iconTheme.color ?? textColor;
+    final badgeBg = theme.colorScheme.error;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -141,10 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Text(
             'Xin chào, $displayName!',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: textColor,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -159,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
               alignment: Alignment.center,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.message_rounded, color: Colors.black87),
+                  icon: Icon(Icons.message_rounded, color: iconColor),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -173,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: 6,
                     child: CircleAvatar(
                       radius: 10,
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: badgeBg,
                       child: Text(
                         '$unread',
                         style: const TextStyle(
@@ -190,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
 
         // Icon thông báo
-        NotificationsButton(color: Colors.black),
+        NotificationsButton(color: Theme.of(context).iconTheme.color ?? Colors.black),
       ],
     );
   }
@@ -200,8 +237,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
     final mq = MediaQuery.of(context);
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    // pastel colors (theme-aware)
+    final pastelPurple = isDark ? const Color.fromARGB(255, 53, 85, 212) : const Color.fromARGB(255, 121, 180, 248);
+    final pastelOrange = isDark ? const Color.fromARGB(255, 212, 124, 56) : const Color.fromARGB(255, 248, 195, 131);
+    final pastelGreen = isDark ? const Color.fromARGB(255, 81, 227, 130) : const Color.fromARGB(255, 249, 140, 207);
+
+
+    // theme-aware colors
+    // use surface (replacement for background per deprecation)
+    final scaffoldBg = theme.colorScheme.surface;
+    final softCardColor = isDark ? const Color(0xFF0F1720) : const Color.fromARGB(255, 212, 241, 222);
+    final textPrimary = theme.textTheme.bodyLarge?.color ?? (isDark ? Colors.white70 : Colors.black87);
+    final primaryColor = theme.colorScheme.primary;
+    final progressBg = isDark ? Color.fromRGBO(255, 255, 255, 0.06) : const Color.fromARGB(255, 4, 60, 40).withAlpha((0.2 * 255).round());
+    final progressColor = isDark ? primaryColor : Colors.green;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE7F6EB),
+      backgroundColor: scaffoldBg,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -221,13 +275,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                     final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
 
-                    // Fallback chain:
-                    // 1) Firestore displayName nếu có và không rỗng
-                    // 2) FirebaseAuth.currentUser.displayName nếu có và không rỗng
-                    // 3) email username (phần trước @) nếu có
-                    // 4) 'bạn' mặc định
+                    // Fallback chain for displayName
                     String displayName = 'bạn';
-
                     final fsName = (data['displayName'] as String?)?.trim();
                     if (fsName != null && fsName.isNotEmpty) {
                       displayName = fsName;
@@ -282,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           elevation: 6,
-                          color: const Color.fromARGB(255, 212, 241, 222),
+                          color: softCardColor,
                           child: Padding(
                             padding: const EdgeInsets.all(20),
                             child: Column(
@@ -300,21 +349,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ],
                                   ),
                                 const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    if (bmi != null)
-                                      _caloItem("BMI", bmi.toStringAsFixed(1),
-                                          valueColor: Colors.deepPurple),
-                                    if (bmr != null)
-                                      _caloItem("BMR", "$bmr calo",
-                                          valueColor: Colors.orange),
-                                    if (tdee != null)
-                                      _caloItem("TDEE", "$tdee calo",
-                                          valueColor: Colors.green),
-                                  ],
-                                ),
+                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                if (bmi != null)
+                                  _caloItem(
+                                    "BMI",
+                                    bmi.toStringAsFixed(1),
+                                    valueColor: pastelPurple,
+                                  ),
+                                if (bmr != null)
+                                  _caloItem(
+                                    "BMR",
+                                    "$bmr calo",
+                                    valueColor: pastelOrange,
+                                  ),
+                                if (tdee != null)
+                                  _caloItem(
+                                    "TDEE",
+                                    "$tdee calo",
+                                    valueColor: pastelGreen,
+                                  ),
+                              ],
+                            ),
+
                                 const SizedBox(height: 20),
                                 if (dailyGoal != null &&
                                     protein != null &&
@@ -325,9 +383,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         .todayCaloriesTotalStream(currentUser.uid),
                                     builder: (context, caloSnap) {
                                       double eatenCalo = caloSnap.data ?? 0;
-                                      double remainingCalo =
-                                          (dailyGoal - eatenCalo)
-                                              .clamp(0, double.infinity);
                                       double progress = (dailyGoal > 0)
                                           ? (eatenCalo / dailyGoal).clamp(0, 1)
                                           : 0;
@@ -336,11 +391,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const Text(
+                                          Text(
                                             'Mục tiêu dinh dưỡng hôm nay',
                                             style: TextStyle(
                                                 fontSize: 18,
-                                                fontWeight: FontWeight.w600),
+                                                fontWeight: FontWeight.w600,
+                                                color: textPrimary),
                                           ),
                                           const SizedBox(height: 10),
                                           Stack(
@@ -351,10 +407,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 child: LinearProgressIndicator(
                                                   minHeight: 28,
                                                   value: progress,
-                                                  backgroundColor: Colors.green
-                                                      .withAlpha(
-                                                          (0.2 * 255).round()),
-                                                  color: Colors.green,
+                                                  backgroundColor: progressBg,
+                                                  color: progressColor,
                                                 ),
                                               ),
                                               Positioned.fill(
@@ -383,29 +437,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   macroSnap.data?['carbs'] ?? 0;
                                               final eatenFat =
                                                   macroSnap.data?['fat'] ?? 0;
-
-                                              return Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  _macroItem(
-                                                      'Protein',
-                                                      eaten: eatenProtein.round(),
-                                                      goal: protein,
-                                                      color: Colors.purple),
-                                                  _macroItem(
-                                                      'Carbs',
-                                                      eaten: eatenCarbs.round(),
-                                                      goal: carbs,
-                                                      color: Colors.blue),
-                                                  _macroItem(
-                                                      'Fat',
-                                                      eaten: eatenFat.round(),
-                                                      goal: fat,
-                                                      color: Colors.orange),
-                                                ],
-                                              );
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              _macroProgressRow(
+                                                label: 'Protein',
+                                                eaten: eatenProtein.round(),
+                                                goal: protein,
+                                                color: const Color(0xFFD7BDE2), // pastel purple
+                                              ),
+                                              const SizedBox(height: 8),
+                                              _macroProgressRow(
+                                                label: 'Carbs',
+                                                eaten: eatenCarbs.round(),
+                                                goal: carbs,
+                                                color: const Color(0xFFAED6F1), // pastel blue
+                                              ),
+                                              const SizedBox(height: 8),
+                                              _macroProgressRow(
+                                                label: 'Fat',
+                                                eaten: eatenFat.round(),
+                                                goal: fat,
+                                                color: const Color(0xFFF9E79F), // pastel yellow/orange
+                                              ),
+                                            ],
+                                          );
+;
                                             },
                                           ),
                                         ],
@@ -424,9 +481,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
 
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Tiện ích hôm nay',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textPrimary),
               ),
               const SizedBox(height: 16),
               _buildFeatureButtonsGrid(mq),
@@ -440,7 +497,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------- FEATURE GRID ----------------
   Widget _buildFeatureButtonsGrid(MediaQueryData mq) {
     final features = _features;
-    double itemWidth = (mq.size.width - 64) / 3; // 16 padding *2 + 14*2 spacing
+    double horizontalPadding = 16 * 2; // container padding left + right
+    double spacing = 14 * 2; // approx spacing accounted (not exact, but fine)
+    double itemWidth = (mq.size.width - horizontalPadding - spacing) / 3;
     return GridView.builder(
       itemCount: features.length,
       physics: const NeverScrollableScrollPhysics(),
@@ -449,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisCount: 3,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
-        childAspectRatio: itemWidth / 120, // bự hơn
+        childAspectRatio: itemWidth / 120,
       ),
       itemBuilder: (context, index) {
         final f = features[index];
@@ -474,9 +533,13 @@ class _FeatureSquareButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color bg = Color(0xFFEFF9F5);
-    const Color iconBg = Color(0xFFF3FBF6);
-    const Color iconColor = Color(0xFF1B8E7B);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final bg = isDark ? theme.cardColor : const Color(0xFFEFF9F5);
+    final iconBg = isDark ? const Color.fromRGBO(255,255,255,0.06) : const Color(0xFFF3FBF6);
+    final iconColor = isDark ? theme.colorScheme.primary : const Color(0xFF1B8E7B);
+    final textColor = theme.textTheme.bodyMedium?.color ?? (isDark ? Colors.white70 : const Color(0xFF2E2E2E));
 
     return GestureDetector(
       onTap: onTap,
@@ -490,7 +553,7 @@ class _FeatureSquareButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: isDark ? Color.fromRGBO(0,0,0,0.4) : Color.fromRGBO(0,0,0,0.02),
                     blurRadius: 6,
                     offset: const Offset(0, 4))
               ],
@@ -499,8 +562,7 @@ class _FeatureSquareButton extends StatelessWidget {
               child: Container(
                 width: 40,
                 height: 40,
-                decoration:
-                    BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
                 child: Center(child: Icon(icon, color: iconColor, size: 20)),
               ),
             ),
@@ -513,7 +575,7 @@ class _FeatureSquareButton extends StatelessWidget {
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               maxLines: 2,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF2E2E2E)),
+              style: TextStyle(fontSize: 12, color: textColor),
             ),
           ),
         ],

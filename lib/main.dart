@@ -13,7 +13,6 @@ import 'screens/account/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'core/push/push_bootstrap.dart';
-
 // Top-level handler cho message khi app nền/đóng
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {

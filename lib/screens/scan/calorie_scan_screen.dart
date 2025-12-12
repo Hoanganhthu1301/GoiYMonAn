@@ -166,7 +166,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> with WidgetsBindi
                   left: 30,
                   child: FloatingActionButton(
                     onPressed: _captureAndScan,
-                    backgroundColor: Colors.orange,
+                    backgroundColor: const Color(0xFF1B8E7B),
                     child: _isScanning
                         ? const CircularProgressIndicator(color: Colors.white)
                         : const Icon(Icons.camera_alt),
@@ -179,7 +179,7 @@ class _CalorieScanScreenState extends State<CalorieScanScreen> with WidgetsBindi
                   right: 30,
                   child: FloatingActionButton(
                     onPressed: _pickFromGallery,
-                    backgroundColor: Colors.orange,
+                    backgroundColor: const Color(0xFF1B8E7B),
                     child: const Icon(Icons.photo_library),
                   ),
                 ),

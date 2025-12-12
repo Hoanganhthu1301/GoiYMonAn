@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'home/home_screen.dart';
-import 'profile/profile_screen.dart' show ProfileScreen; // <-- chỉ import ProfileScreen để tránh ambiguous import
+import 'profile/profile_screen.dart' show ProfileScreen;
 import 'food/food_list_screen.dart';
 import 'category/manage_category_page.dart';
 import 'account/user_management_screen.dart';
@@ -39,30 +39,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         userRole = role;
 
-        // Nếu là admin thì có thêm trang "Quản lý"
         if (userRole == 'admin') {
+          // Admin: mở thẳng Món ăn, vẫn giữ các tab quản lý khác
           _pages = <Widget>[
-            const HomeScreen(),
-            FoodListScreen(),
-            const ManageCategoryPage(),
-            const UserManagementScreen(),
-            const ManageFoodPage(),
-            ProfileScreen(userId: currentUserId),
+            const FoodListScreen(),       // Món ăn
+            const ManageCategoryPage(),   // Danh mục
+            const UserManagementScreen(), // Người dùng
+            const ManageFoodPage(),       // Bài viết
+            ProfileScreen(userId: currentUserId), // Cá nhân
           ];
+          _currentIndex = 0; // mở thẳng Món ăn
         } else {
-          // User chỉ có Trang chủ và Cá nhân
+          // User bình thường
           _pages = <Widget>[
-            const HomeScreen(),
-            FoodListScreen(),
-            ProfileScreen(userId: currentUserId),
+            const HomeScreen(),           // Trang chủ
+            FoodListScreen(),             // Món ăn
+            ProfileScreen(userId: currentUserId), // Cá nhân
           ];
+          _currentIndex = 0;
         }
       });
     } catch (e) {
       debugPrint('Lỗi lấy role: $e');
       setState(() {
         userRole = 'user';
-        _pages = <Widget>[const HomeScreen(), ProfileScreen(userId: currentUserId)];
+        _pages = <Widget>[
+          const HomeScreen(),
+          ProfileScreen(userId: currentUserId)
+        ];
+        _currentIndex = 0;
       });
     }
   }
@@ -70,7 +75,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (userRole.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
@@ -91,10 +98,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
         items: userRole == 'admin'
             ? const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.home),
-                  label: 'Trang chủ',
-                ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.restaurant_menu),
                   label: 'Món ăn',

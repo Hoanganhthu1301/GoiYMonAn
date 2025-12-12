@@ -148,48 +148,53 @@ class _FoodListScreenState extends State<FoodListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
-      appBar: AppBar(
-        title: const Text(
-          'Danh sách món ăn',
-          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.green),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.green))
-          : RefreshIndicator(
-              onRefresh: _refresh,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildSearchAndFilter(),
-                    const SizedBox(height: 12),
-                    _buildCategoryList(),
-                    const SizedBox(height: 12),
-                    Expanded(child: _buildFoodList()),
-                  ],
+      resizeToAvoidBottomInset: true,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+            : RefreshIndicator(
+                onRefresh: _refresh,
+                color: theme.colorScheme.primary,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSearchAndFilter(theme),
+                            const SizedBox(height: 12),
+                            _buildCategoryList(theme),
+                            const SizedBox(height: 12),
+                            _buildFoodList(theme),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+      ),
     );
   }
 
-  Widget _buildSearchAndFilter() {
+  Widget _buildSearchAndFilter(ThemeData theme) {
     return Row(
       children: [
         Expanded(
           child: TextField(
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white,
+              fillColor: theme.cardColor,
               hintText: 'Tìm món ăn...',
-              prefixIcon: const Icon(Icons.search, color: Colors.green),
+              prefixIcon: Icon(Icons.search, color: theme.colorScheme.primary),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
@@ -203,88 +208,80 @@ class _FoodListScreenState extends State<FoodListScreen> {
           ),
         ),
         const SizedBox(width: 10),
-        _buildDietFilterButton(),
+        _buildDietFilterButton(theme),
       ],
     );
   }
 
-  Widget _buildDietFilterButton() {
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          builder: (_) => Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+Widget _buildDietFilterButton(ThemeData theme) {
+  return GestureDetector(
+    onTap: () {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Chọn chế độ ăn',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 16, color: theme.colorScheme.primary),
+          ),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                const Text(
-                  'Chọn chế độ ăn',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.green),
+                ChoiceChip(
+                  label: const Text('Tất cả', style: TextStyle(fontSize: 12)),
+                  selected: selectedDiet.isEmpty,
+                  selectedColor: theme.colorScheme.primary.withOpacity(0.4),
+                  backgroundColor: theme.cardColor,
+                  onSelected: (_) {
+                    setState(() {
+                      selectedDiet = '';
+                      _currentPage = 1;
+                      _updatePageData();
+                    });
+                    Navigator.pop(context);
+                  },
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Tất cả', style: TextStyle(fontSize: 12)),
-                      selected: selectedDiet.isEmpty,
-                      selectedColor: Colors.greenAccent.withOpacity(0.4),
-                      backgroundColor: Colors.grey[200],
-                      onSelected: (_) {
-                        setState(() {
-                          selectedDiet = '';
-                          _currentPage = 1;
-                          _updatePageData();
-                        });
-                        Navigator.pop(context);
-                      },
-                    ),
-                    ..._dietCategories.map((diet) {
-                      final isSelected = selectedDiet == diet;
-                      return ChoiceChip(
-                        label: Text(diet, style: const TextStyle(fontSize: 12)),
-                        selected: isSelected,
-                        selectedColor: Colors.greenAccent.withOpacity(0.4),
-                        backgroundColor: Colors.grey[200],
-                        labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : Colors.black87),
-                        onSelected: (_) {
-                          setState(() {
-                            selectedDiet = isSelected ? '' : diet;
-                            _currentPage = 1;
-                            _updatePageData();
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    }).toList(),
-                  ],
-                ),
+                ..._dietCategories.map((diet) {
+                  final isSelected = selectedDiet == diet;
+                  return ChoiceChip(
+                    label: Text(diet, style: const TextStyle(fontSize: 12)),
+                    selected: isSelected,
+                    selectedColor: theme.colorScheme.primary.withOpacity(0.4),
+                    backgroundColor: theme.cardColor,
+                    labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : theme.textTheme.bodyMedium?.color),
+                    onSelected: (_) {
+                      setState(() {
+                        selectedDiet = isSelected ? '' : diet;
+                        _currentPage = 1;
+                        _updatePageData();
+                      });
+                      Navigator.pop(context);
+                    },
+                  );
+                }).toList(),
               ],
             ),
           ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.green.withAlpha(30),
-          shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.tune, color: Colors.green, size: 20),
+      );
+    },
+    child: Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withAlpha(30),
+        shape: BoxShape.circle,
       ),
-    );
-  }
+      child: Icon(Icons.tune, color: theme.colorScheme.primary, size: 20),
+    ),
+  );
+}
 
-  Widget _buildCategoryList() {
+
+  Widget _buildCategoryList(ThemeData theme) {
     return SizedBox(
       height: 80,
       child: ListView.builder(
@@ -309,7 +306,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? color.withOpacity(0.3) : Colors.white,
+                color: isSelected ? color.withOpacity(0.3) : theme.cardColor,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: color.withOpacity(0.3)),
               ),
@@ -335,18 +332,19 @@ class _FoodListScreenState extends State<FoodListScreen> {
     );
   }
 
-  Widget _buildFoodList() {
+  Widget _buildFoodList(ThemeData theme) {
     return ListView.builder(
-      controller: _scrollController,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: _displayFoods.length,
       itemBuilder: (context, index) {
         final food = _displayFoods[index];
-        return _buildFoodCard(food);
+        return _buildFoodCard(food, theme);
       },
     );
   }
 
-  Widget _buildFoodCard(DocumentSnapshot food) {
+  Widget _buildFoodCard(DocumentSnapshot food, ThemeData theme) {
     final data = food.data() as Map<String, dynamic>? ?? {};
     final imageUrl = (data['image_url'] ?? '').toString();
 
@@ -363,7 +361,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
           image: imageUrl.isNotEmpty
               ? DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover)
               : null,
-          color: imageUrl.isEmpty ? Colors.green[50] : null,
+          color: imageUrl.isEmpty ? theme.cardColor : null,
           boxShadow: [
             BoxShadow(
               color: Colors.grey.withOpacity(0.15),
@@ -378,7 +376,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  color: const Color(0xFF2F2F2F).withAlpha(30),
+                  color: Colors.black.withAlpha(30),
                 ),
               ),
             Positioned(
@@ -391,14 +389,14 @@ class _FoodListScreenState extends State<FoodListScreen> {
                   Text(
                     data['name'] ?? '',
                     style: const TextStyle(
-                        color: Color(0xFFFEFEFE),
+                        color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Calo: ${data['calories'] ?? 0} kcal',
-                    style: const TextStyle(color: Color(0xFFA6F8A9), fontSize: 13),
+                    style: TextStyle(color: theme.colorScheme.secondary, fontSize: 13),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -410,7 +408,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
                           return IconButton(
                             icon: Icon(
                               liked ? Icons.favorite : Icons.favorite_border,
-                              color: liked ? Colors.pink[200] : Colors.black54,
+                              color: liked ? Colors.pink[200] : theme.iconTheme.color,
                               size: 20,
                             ),
                             onPressed: uid == null
@@ -426,7 +424,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
                           return IconButton(
                             icon: Icon(
                               saved ? Icons.bookmark : Icons.bookmark_border_outlined,
-                              color: saved ? Colors.green[200] : Colors.black54,
+                              color: saved ? Colors.green[200] : theme.iconTheme.color,
                               size: 20,
                             ),
                             onPressed: uid == null
