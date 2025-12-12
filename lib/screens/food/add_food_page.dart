@@ -27,7 +27,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   String? _selectedCategoryId;
   String? _selectedDietId;
-
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _diets = [];
 
@@ -71,12 +70,16 @@ class _AddFoodPageState extends State<AddFoodPage> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
     if (pickedFile != null) setState(() => _imageFile = File(pickedFile.path));
   }
 
   Future<void> _pickVideo() async {
-    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickVideo(
+      source: ImageSource.gallery,
+    );
     if (pickedFile != null) {
       setState(() => _videoFile = File(pickedFile.path));
       _videoController?.dispose();
@@ -90,9 +93,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   Future<String?> _uploadFile(File file, String folder) async {
     try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('foods/$folder/${DateTime.now().millisecondsSinceEpoch}');
+      final ref = FirebaseStorage.instance.ref().child(
+        'foods/$folder/${DateTime.now().millisecondsSinceEpoch}',
+      );
       await ref.putFile(file);
       return await ref.getDownloadURL();
     } catch (e) {
@@ -112,12 +115,17 @@ class _AddFoodPageState extends State<AddFoodPage> {
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
 
+    // UPLOAD ẢNH & VIDEO
     String? imageUrl;
     String? videoUrl;
+
     if (_imageFile != null) imageUrl = await _uploadFile(_imageFile!, 'images');
     if (_videoFile != null) videoUrl = await _uploadFile(_videoFile!, 'videos');
 
-    final category = _categories.firstWhere((e) => e['id'] == _selectedCategoryId);
+    // Lấy category & diet info
+    final category = _categories.firstWhere(
+      (e) => e['id'] == _selectedCategoryId,
+    );
     final diet = _diets.firstWhere((e) => e['id'] == _selectedDietId);
 
     final ingredientService = IngredientKeywordService();
@@ -125,6 +133,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
     final ingredientKeywords = await ingredientService.generateKeywords(
       _ingredientsController.text.trim(),
     );
+
 
     List<String> imageKeywords = [];
     if (_imageFile != null) imageKeywords = await visionService.generateKeywords(_imageFile!);
@@ -152,8 +161,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
     });
 
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Thêm món ăn thành công!')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Thêm món ăn thành công!')));
       Navigator.pop(context);
     }
     setState(() => _isLoading = false);
@@ -193,7 +203,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _caloriesController,
-                decoration: const InputDecoration(labelText: 'Lượng calo (kcal)'),
+                decoration: const InputDecoration(
+                  labelText: 'Lượng calo (kcal)',
+                ),
                 keyboardType: TextInputType.number,
                 validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
               ),
@@ -218,6 +230,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
                   ))
               .toList(),
 
+
                 onChanged: (val) => setState(() => _selectedCategoryId = val),
                 validator: (v) => v == null ? 'Chọn danh mục món ăn' : null,
               ),
@@ -226,10 +239,12 @@ class _AddFoodPageState extends State<AddFoodPage> {
                 initialValue: _selectedDietId,
                 decoration: const InputDecoration(labelText: 'Chế độ ăn'),
                 items: _diets
-                    .map((diet) => DropdownMenuItem<String>(
-                          value: diet['id'],
-                          child: Text(diet['name']),
-                        ))
+                    .map(
+                      (diet) => DropdownMenuItem<String>(
+                        value: diet['id'],
+                        child: Text(diet['name']),
+                      ),
+                    )
                     .toList(),
                 onChanged: (val) => setState(() => _selectedDietId = val),
                 validator: (v) => v == null ? 'Chọn chế độ ăn' : null,
@@ -244,7 +259,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _instructionsController,
-                decoration: const InputDecoration(labelText: 'Các bước thực hiện'),
+                decoration: const InputDecoration(
+                  labelText: 'Các bước thực hiện',
+                ),
                 maxLines: 5,
                 validator: (v) => v!.isEmpty ? 'Không được bỏ trống' : null,
               ),

@@ -48,7 +48,7 @@ final List<Map<String, dynamic>> foodDB = [
   {"keyword": "soy milk", "name": "Sữa đậu nành", "cal": 54},
   {"keyword": "milk", "name": "Sữa bò", "cal": 42},
   {"keyword": "yogurt", "name": "Sữa chua", "cal": 99},
-{"keyword": "che", "name": "Chè", "cal": 160},
+  {"keyword": "che", "name": "Chè", "cal": 160},
   {"keyword": "ice cream", "name": "Kem", "cal": 207},
   {"keyword": "cake", "name": "Bánh kem", "cal": 257},
   {"keyword": "cookie", "name": "Bánh quy", "cal": 502},
@@ -99,7 +99,8 @@ final List<Map<String, dynamic>> foodDB = [
   {"keyword": "wonton", "name": "Hoành thánh", "cal": 240},
   {"keyword": "fried egg", "name": "Trứng chiên", "cal": 196},
   {"keyword": "boiled egg", "name": "Trứng luộc", "cal": 155},
-{"keyword": "omelette", "name": "Ốp la", "cal": 240},
+
+  {"keyword": "omelette", "name": "Ốp la", "cal": 240},
   {"keyword": "sausage", "name": "Xúc xích", "cal": 301},
   {"keyword": "cheese", "name": "Phô mai", "cal": 402},
   {"keyword": "butter", "name": "Bơ", "cal": 717},

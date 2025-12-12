@@ -11,6 +11,7 @@ class GoogleVisionService {
 
     final url = "https://vision.googleapis.com/v1/images:annotate?key=$apiKey";
 
+
     final body = {
       "requests": [
         {

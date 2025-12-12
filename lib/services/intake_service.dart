@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// ===============================
+///  MODEL Consumption (không tách file)
+/// ===============================
 class Consumption {
   final String id;
   final String foodId;
@@ -59,6 +62,7 @@ class IntakeService {
   }
 
   /// Lấy tất cả lịch sử món ăn
+
   Stream<List<Consumption>> allConsumptionsStream(String uid) {
     return _db
         .collection("users")
@@ -112,6 +116,7 @@ class IntakeService {
     }).toList();
   }
 
+
   /// ⭐ GIỮ LẠI: Tổng calo hôm nay (realtime)
   Stream<double> todayCaloriesTotalStream(String uid) {
     final start = DateTime(
@@ -135,6 +140,7 @@ class IntakeService {
           return total;
         });
   }
+
   Stream<Map<String, double>> todayMacrosConsumedStream(String uid) {
   final start = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
@@ -160,7 +166,9 @@ class IntakeService {
       });
 }
 
-  /// ⭐ Map để vẽ biểu đồ
+  /// ---------------------------------------------------
+  /// ⭐ 5) MAP DỮ LIỆU BIỂU ĐỒ CALO
+  /// ---------------------------------------------------
   Map<DateTime, double> caloriesByDay(List<Consumption> all) {
     final Map<DateTime, double> result = {};
 
@@ -176,18 +184,17 @@ class IntakeService {
     return result;
   }
 
-  // ===========================================================
-  // ⭐⭐ PHẦN MỚI: LƯU & LẤY CÂN NẶNG THEO THÁNG ⭐⭐
-  // ===========================================================
-
   /// Lưu cân nặng theo tháng
+
   Future<void> saveWeight({
     required String uid,
     required double weight,
     required int month,
     required int year,
   }) async {
+
     final id = "$year-$month"; // docId = 2025-1, 2025-2...
+
 
     await _db.collection("users").doc(uid).collection("weights").doc(id).set({
       "weight": weight,
@@ -198,6 +205,7 @@ class IntakeService {
   }
 
   /// Lấy toàn bộ cân nặng trong năm
+
   Stream<Map<int, double>> weightByMonthStream(String uid) {
     final year = DateTime.now().year;
 

@@ -15,7 +15,7 @@ class FoodScanScreen extends StatefulWidget {
 }
 
 class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObserver {
-  late CameraController _cameraController;
+  CameraController? _cameraController;
   bool _isCameraInitialized = false;
   final ImagePicker _picker = ImagePicker();
   final GoogleVisionService _vision = GoogleVisionService();
@@ -34,29 +34,37 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
   }
 
   Future<void> _initializeCamera() async {
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) return;
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
 
-    _cameraController = CameraController(cameras.first, ResolutionPreset.high);
-    await _cameraController.initialize();
-    if (!mounted) return;
-    setState(() => _isCameraInitialized = true);
+      _cameraController = CameraController(cameras.first, ResolutionPreset.high);
+      await _cameraController!.initialize();
+      if (!mounted) return;
+      setState(() => _isCameraInitialized = true);
+    } catch (e) {
+      debugPrint('Lỗi khởi tạo camera: $e');
+    }
   }
 
   @override
   void dispose() {
-    _cameraController.dispose();
+    try {
+      if (_cameraController != null && _isCameraInitialized) {
+        _cameraController!.dispose();
+      }
+    } catch (e) {
+      debugPrint('Lỗi dispose camera: $e');
+    }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   Future<void> _takePhotoAndScan() async {
-    if (!_cameraController.value.isInitialized || _isScanning) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized || _isScanning) return;
     try {
-      // Chụp hình
-      final file = await _cameraController.takePicture();
+      final file = await _cameraController!.takePicture();
 
-      // Hiển thị ảnh tạm thời, ẩn live camera
       setState(() {
         _imageFile = File(file.path);
         _detectedKeywords = [];
@@ -65,7 +73,6 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
         _isScanning = true;
       });
 
-      // Quét ảnh
       final keywords = await _vision.detectLabels(_imageFile!);
 
       if (keywords.isEmpty) {
@@ -81,7 +88,6 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
         _detectedKeywords = keywords;
       });
 
-      // Lấy dữ liệu từ Firebase
       final QuerySnapshot allFoodsSnap = await FirebaseFirestore.instance
           .collection('foods')
           .orderBy('created_at', descending: true)
@@ -115,8 +121,8 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
         _showResults = true;
         _isScanning = false;
       });
-    } catch (e) {
-      debugPrint("Lỗi chụp/quét: $e");
+    } catch (e, st) {
+      debugPrint("Lỗi chụp/quét: $e\n$st");
       setState(() {
         _isScanning = false;
         _showResults = true;
@@ -131,6 +137,7 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
         maxWidth: 800,
         maxHeight: 800,
       );
+
       if (pickedFile != null) {
         setState(() {
           _imageFile = File(pickedFile.path);
@@ -138,7 +145,6 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
           _searchResults = [];
           _showResults = false;
         });
-        // Quét luôn sau khi chọn ảnh
         await _scanAndSearchFromFile();
       }
     } catch (e) {
@@ -200,11 +206,11 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
         _showResults = true;
         _isScanning = false;
       });
-    } catch (e) {
-      debugPrint("Lỗi scan file: $e");
+    } catch (e, st) {
+      debugPrint('Lỗi khi quét ảnh từ file: $e\n$st');
       setState(() {
-        _showResults = true;
         _isScanning = false;
+        _showResults = true;
       });
     }
   }
@@ -219,8 +225,8 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
           Positioned.fill(
             child: _imageFile != null
                 ? Image.file(_imageFile!, fit: BoxFit.cover)
-                : (_isCameraInitialized
-                    ? CameraPreview(_cameraController)
+                : (_isCameraInitialized && _cameraController != null
+                    ? CameraPreview(_cameraController!)
                     : const Center(child: CircularProgressIndicator())),
           ),
 
@@ -306,10 +312,11 @@ class _FoodScanScreenState extends State<FoodScanScreen> with WidgetsBindingObse
                                     width: 60,
                                     height: 60,
                                     fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const SizedBox.shrink(),
                                   ),
                                 ),
                                 title: Text(data['name'] ?? "Món ăn"),
-                                subtitle: Text("${data['calories']} kcal"),
+                                subtitle: Text("${data['calories'] ?? '-'} kcal"),
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () {
                                   Navigator.push(

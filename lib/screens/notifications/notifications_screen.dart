@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/notification_service.dart';
 import '../food/food_detail_screen.dart';
-import '../profile/profile_screen.dart';
+// tránh ambiguous import: chỉ import đúng symbol cần dùng
+import '../profile/profile_screen.dart' show ProfileScreen;
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -95,13 +96,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onPressed: _items.isEmpty
                 ? null
                 : () async {
-                    // === SỬA LỖI 1: Lấy ScaffoldMessenger trước await ===
+                    // lấy ScaffoldMessenger trước khi await để tránh use_build_context_synchronously
                     final scaffoldMessenger = ScaffoldMessenger.of(context);
                     await _svc.markAllAsRead();
                     if (!mounted) return;
                     await _loadInitial();
 
-                    // Sử dụng biến đã được lưu
                     scaffoldMessenger.showSnackBar(
                       const SnackBar(
                         content: Text('Đã đánh dấu tất cả đã đọc'),
@@ -150,7 +150,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     VoidCallback? onTap;
 
                     if (type == 'follow') {
-                      // === SỬA LỖI 2: Thêm dấu ngoặc nhọn {} ===
                       if (title.isEmpty) {
                         title = '$actorName đã theo dõi bạn';
                       }
@@ -163,7 +162,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         );
                       };
                     } else if (type == 'like') {
-                      // === SỬA LỖI 2: Thêm dấu ngoặc nhọn {} ===
                       if (title.isEmpty) {
                         title = '$actorName đã thích bài viết của bạn';
                       }
@@ -180,7 +178,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               );
                             };
                     } else {
-                      // === SỬA LỖI 2: Thêm dấu ngoặc nhọn {} ===
                       if (title.isEmpty) {
                         title = 'Thông báo mới';
                       }

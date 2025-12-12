@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../food/food_detail_screen.dart';
 import '../account/login_screen.dart';
 import 'edit_profile_screen.dart';
@@ -241,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             icon: const Icon(Icons.logout),
           ),
         ],
-      ),
+    ),
       body: RefreshIndicator(
         onRefresh: _refreshAll,
         color: primaryGreen,
@@ -348,7 +347,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     return 'Béo phì';
   }
 
-  // ================== HEADER PROFILE ==================
 Widget _buildProfileHeader(
   BuildContext context,
   Map<String, dynamic> userData,
@@ -467,10 +465,9 @@ Widget _buildProfileHeader(
                   ],
                 ],
               ),
-            ),
+            ),  
           ],
         ),
-
         const SizedBox(height: 12),
 
         // Stats
@@ -591,7 +588,8 @@ Widget _buildProfileHeader(
       ],
     ),
   );
-}
+
+  }
 
 
 Widget _buildOverviewTab(
@@ -952,7 +950,6 @@ Widget _buildOverviewTab(
       ),
     );
   }
-
   // ================== TAB BÀI VIẾT (MÓN ĂN) ==================
   Widget _buildPostsTab(Color secondaryText) {
     if (_loadingPosts) {

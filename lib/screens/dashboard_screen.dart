@@ -1,9 +1,8 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'home/home_screen.dart';
-import 'profile/profile_screen.dart';
+import 'profile/profile_screen.dart' show ProfileScreen; // <-- chỉ import ProfileScreen để tránh ambiguous import
 import 'food/food_list_screen.dart';
 import 'category/manage_category_page.dart';
 import 'account/user_management_screen.dart';
@@ -30,20 +29,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadUserRole() async {
     try {
-
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUserId)
           .get();
 
-      String role = userDoc['role'] ?? 'user';
+      String role = (userDoc.data() as Map<String, dynamic>?)?['role'] ?? 'user';
 
       setState(() {
         userRole = role;
 
-        // 👉 Nếu là admin thì có thêm trang "Quản lý"
+        // Nếu là admin thì có thêm trang "Quản lý"
         if (userRole == 'admin') {
-          _pages = [
+          _pages = <Widget>[
             const HomeScreen(),
             FoodListScreen(),
             const ManageCategoryPage(),
@@ -52,20 +50,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ProfileScreen(userId: currentUserId),
           ];
         } else {
-          // 👉 User chỉ có Trang chủ và Cá nhân
-          _pages = [
+          // User chỉ có Trang chủ và Cá nhân
+          _pages = <Widget>[
             const HomeScreen(),
             FoodListScreen(),
             ProfileScreen(userId: currentUserId),
-
-            ];
+          ];
         }
       });
     } catch (e) {
-    debugPrint('Lỗi lấy role: $e');
+      debugPrint('Lỗi lấy role: $e');
       setState(() {
         userRole = 'user';
-        _pages = [const HomeScreen(), ProfileScreen(userId: currentUserId)];
+        _pages = <Widget>[const HomeScreen(), ProfileScreen(userId: currentUserId)];
       });
     }
   }
@@ -84,63 +81,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         selectedItemColor: const Color(0xFF1F3B2E),
-          unselectedItemColor: Colors.grey, // màu cho icon chưa chọn
-          showUnselectedLabels: true,       // 🔹 luôn hiện label cho icon chưa chọn
-          type: BottomNavigationBarType.fixed, // 🔹 giữ cố định layout
-                onTap: (index) {
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) {
           setState(() {
             _currentIndex = index;
           });
         },
-items: userRole == 'admin'
-    ? const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Trang chủ',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.restaurant_menu),
-          label: 'Món ăn',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.category),
-          label: 'Danh mục',
-        ),
+        items: userRole == 'admin'
+            ? const [
                 BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Người dùng',
-        ),
-               BottomNavigationBarItem(
-          icon: Icon(Icons.article),
-          label: 'Bài viết',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Cá nhân',
-        ),
-      ]
-    : const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label:' Trang chủ',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.restaurant_menu),
-          label: 'Món ăn',
-        ),
-        // BottomNavigationBarItem(
-        //   icon: Icon(Icons.auto_awesome),
-        //   label: 'Gợi ý',
-        // ),
-        // BottomNavigationBarItem(
-        //   icon: Icon(Icons.bookmark),
-        //   label: 'Đã lưu',
-        // ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Cá nhân',
-        ),
-      ],
+                  icon: Icon(Icons.home),
+                  label: 'Trang chủ',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.restaurant_menu),
+                  label: 'Món ăn',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.category),
+                  label: 'Danh mục',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Người dùng',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.article),
+                  label: 'Bài viết',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Cá nhân',
+                ),
+              ]
+            : const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home),
+                  label: 'Trang chủ',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.restaurant_menu),
+                  label: 'Món ăn',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person),
+                  label: 'Cá nhân',
+                ),
+              ],
       ),
     );
   }

@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _currentUserRole = 'guest';
   bool get _isAdmin => _currentUserRole == 'admin';
 
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String> _authServiceGetRoleSafe() async {
+
     try {
       return await _authService.getCurrentUserRole();
     } catch (_) {
@@ -414,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 24),
                       ],
                     );
                   },

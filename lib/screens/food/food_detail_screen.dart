@@ -10,7 +10,11 @@ import '../../services/like_service.dart';
 import '../../services/intake_service.dart';
 import '../../widgets/download_recipe_button.dart';
 import '../../widgets/comment_section.dart';
-import '../profile/profile_screen.dart';
+
+// <-- sửa import profile để tránh ambiguous_import:
+// import '../profile/profile_screen.dart';
+// import '../profile/profile_screen.dart' hide Widget;
+import '../profile/profile_screen.dart' show ProfileScreen;
 
 class FoodDetailScreen extends StatefulWidget {
   final String foodId;
@@ -31,7 +35,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
   final ScrollController _scrollController = ScrollController();
   late final AnimationController _animController;
   bool _commentsExpanded = false;
-  
+
   Widget _previewCommentItem(Map<String, dynamic> doc) {
     final text = doc['text'] ?? '';
     final authorName = doc['authorName'] ?? 'Người dùng';
@@ -79,7 +83,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.uid != authorId) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bạn không có quyền xóa bình luận này')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Bạn không có quyền xóa bình luận này')));
       }
       return;
     }
@@ -109,16 +114,11 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
     }
   }
 
-
   @override
   void initState() {
     super.initState();
-    _foodFuture = FirebaseFirestore.instance
-        .collection('foods')
-        .doc(widget.foodId)
-        .get();
-    _animController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _foodFuture = FirebaseFirestore.instance.collection('foods').doc(widget.foodId).get();
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
   }
 
   @override
@@ -195,7 +195,6 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
           final data = snapshot.data!.data()!;
           final imageUrl = (data['image_url'] ?? '') as String;
           final name = (data['name'] ?? '') as String;
-          final calories = (data['calories'] ?? 0).toString();
           final diet = (data['dietName'] ?? '') as String;
           final categoryId = (data['categoryId'] ?? '') as String;
           final videoUrl = (data['video_url'] ?? '') as String;
@@ -210,11 +209,7 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
 
           // load category name once
           if (categoryId.isNotEmpty && _categoryName.isEmpty) {
-            FirebaseFirestore.instance
-                .collection('categories')
-                .doc(categoryId)
-                .get()
-                .then((cat) {
+            FirebaseFirestore.instance.collection('categories').doc(categoryId).get().then((cat) {
               if (cat.exists && mounted) {
                 setState(() => _categoryName = (cat.data()?['name'] ?? '') as String);
               }
@@ -228,8 +223,6 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
           if (_videoController == null && videoUrl.isNotEmpty) {
             WidgetsBinding.instance.addPostFrameCallback((_) => _videoInit(videoUrl));
           }
-
-
           return CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -242,7 +235,18 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
                       ClipRRect(
                         borderRadius: const BorderRadius.only(
                             bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
-                        child: Image.network(imageUrl, width: double.infinity, height: 260, fit: BoxFit.cover),
+                        child: Image.network(
+                          imageUrl,
+                          width: double.infinity,
+                          height: 260,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => Container(
+                            width: double.infinity,
+                            height: 260,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image, size: 56, color: Colors.grey),
+                          ),
+                        ),
                       )
                     else
                       Container(
@@ -277,7 +281,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
                                   return IconButton(
                                     tooltip: liked ? 'Bỏ thích' : 'Thích',
                                     onPressed: _uid == null ? null : () => _likeSvc.toggleLike(widget.foodId, liked),
-                                    icon: Icon(liked ? Icons.favorite : Icons.favorite_border, color: liked ? Colors.pink : Colors.grey),
+                                    icon: Icon(liked ? Icons.favorite : Icons.favorite_border,
+                                        color: liked ? Colors.pink : Colors.grey),
                                   );
                                 },
                               ),
@@ -289,7 +294,8 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
                                   return IconButton(
                                     tooltip: saved ? 'Bỏ lưu' : 'Lưu',
                                     onPressed: _uid == null ? null : () => _likeSvc.toggleSave(widget.foodId, saved),
-                                    icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, color: saved ? Colors.green : Colors.grey),
+                                    icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border,
+                                        color: saved ? Colors.green : Colors.grey),
                                   );
                                 },
                               ),
@@ -300,69 +306,65 @@ class _FoodDetailScreenState extends State<FoodDetailScreen>
                     ),
 
                     const SizedBox(height: 8),
-Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 16),
-  child: Wrap(
-    spacing: 6,
-    runSpacing: 6,
-    children: [
-      Chip(
-        avatar: const Icon(Icons.local_fire_department, color: Colors.orange),
-        label: Text('${data['calories'] ?? 0} kcal'),
-      ),
-      Chip(
-        // avatar: const Icon(Icons.fitness_center, color: Colors.blue),
-        label: Text('Pro ${data['protein'] ?? 0} g '),
-      ),
-      Chip(
-        // avatar: const Icon(Icons.coffee, color: Colors.brown),
-        label: Text('Carbs ${data['carbs'] ?? 0} g'),
-      ),
-      Chip(
-        // avatar: const Icon(Icons.opacity, color: Colors.red),
-        label: Text('Fat ${data['fat'] ?? 0} g'),
-      ),
-      if (diet.isNotEmpty)
-        Chip(label: Text(diet)),
-      ElevatedButton.icon(
-        onPressed: _uid == null
-            ? null
-            : () async {
-                final kcal = (data['calories'] ?? 0).toDouble();
-                final protein = (data['protein'] ?? 0).toDouble();
-                final carbs = (data['carbs'] ?? 0).toDouble();
-                final fat = (data['fat'] ?? 0).toDouble();
-                final nameLocal = data['name'] ?? '';
-                try {
-                  await IntakeService().addConsumption(
-                    uid: _uid!,
-                    foodId: widget.foodId,
-                    foodName: nameLocal,
-                    calories: kcal,
-                    portions: 1,
-                    protein: protein,
-                    carbs: carbs,
-                    fat: fat,
-                  );
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Đã ghi nhận: $nameLocal (+${kcal.toString()} kcal)')),
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi khi ghi nhận: $e')),
-                  );
-                }
-              },
-        icon: const Icon(Icons.restaurant),
-        label: const Text('Tôi đã ăn món này'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-      ),
-    ],
-  ),
-),
-const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          Chip(
+                            avatar: const Icon(Icons.local_fire_department, color: Colors.orange),
+                            label: Text('${data['calories'] ?? 0} kcal'),
+                          ),
+                          Chip(
+                            label: Text('Pro ${data['protein'] ?? 0} g '),
+                          ),
+                          Chip(
+                            label: Text('Carbs ${data['carbs'] ?? 0} g'),
+                          ),
+                          Chip(
+                            label: Text('Fat ${data['fat'] ?? 0} g'),
+                          ),
+                          if (diet.isNotEmpty) Chip(label: Text(diet)),
+                          ElevatedButton.icon(
+                            onPressed: _uid == null
+                                ? null
+                                : () async {
+                                    final kcal = (data['calories'] ?? 0).toDouble();
+                                    final protein = (data['protein'] ?? 0).toDouble();
+                                    final carbs = (data['carbs'] ?? 0).toDouble();
+                                    final fat = (data['fat'] ?? 0).toDouble();
+                                    final nameLocal = data['name'] ?? '';
+                                    try {
+                                      await IntakeService().addConsumption(
+                                        uid: _uid!,
+                                        foodId: widget.foodId,
+                                        foodName: nameLocal,
+                                        calories: kcal,
+                                        portions: 1,
+                                        protein: protein,
+                                        carbs: carbs,
+                                        fat: fat,
+                                      );
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Đã ghi nhận: $nameLocal (+${kcal.toString()} kcal)')),
+                                      );
+                                    } catch (e) {
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Lỗi khi ghi nhận: $e')),
+                                      );
+                                    }
+                                  },
+                            icon: const Icon(Icons.restaurant),
+                            label: const Text('Tôi đã ăn món này'),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -374,13 +376,14 @@ const SizedBox(height: 16),
                       child: Text('Nguyên liệu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primary)),
                     ),
                     const SizedBox(height: 8),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), 
-                              child: ExpandableText(
-                                text: ingredients.isNotEmpty ? ingredients : 'Chưa có thông tin nguyên liệu',
-                                maxLines: 6, // hiển thị 6 dòng, bấm xem thêm để mở rộng
-                                style: const TextStyle(fontSize: 16, height: 1.5),
-                              ),
-                            ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ExpandableText(
+                        text: ingredients.isNotEmpty ? ingredients : 'Chưa có thông tin nguyên liệu',
+                        maxLines: 6,
+                        style: const TextStyle(fontSize: 16, height: 1.5),
+                      ),
+                    ),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -409,7 +412,9 @@ const SizedBox(height: 16),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
                           children: [
-                            ClipRRect(borderRadius: BorderRadius.circular(12), child: AspectRatio(aspectRatio: _videoController!.value.aspectRatio, child: VideoPlayer(_videoController!))),
+                            ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: AspectRatio(aspectRatio: _videoController!.value.aspectRatio, child: VideoPlayer(_videoController!))),
                             VideoProgressIndicator(_videoController!, allowScrubbing: true),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -471,14 +476,13 @@ const SizedBox(height: 16),
                                       return Column(
                                         children: [
                                           // show up to 4 preview items
-                                          if (count > 0)
-                                            ...docs.take(4).map((d) => _previewCommentItem({
-                                                  'id': d.id,
-                                                  'text': d.data()['text'],
-                                                  'authorName': d.data()['authorName'],
-                                                  'authorId': d.data()['authorId'],
-                                                  'createdAt': d.data()['createdAt'],
-                                                })).toList(),
+                                          if (count > 0) ...docs.take(4).map((d) => _previewCommentItem({
+                                                'id': d.id,
+                                                'text': d.data()['text'],
+                                                'authorName': d.data()['authorName'],
+                                                'authorId': d.data()['authorId'],
+                                                'createdAt': d.data()['createdAt'],
+                                              })),
                                           // always show input box (collapsed mode)
                                           const SizedBox(height: 8),
                                           CommentSection(foodId: widget.foodId, showList: false),
@@ -508,7 +512,6 @@ const SizedBox(height: 16),
                     ),
 
                     const SizedBox(height: 40),
-
                   ],
                 ),
               ),
@@ -549,7 +552,7 @@ class _AuthorTile extends StatelessWidget {
             );
           },
           child: _buildTile(displayName.isNotEmpty ? displayName : fallbackName,
-                             photo.isNotEmpty ? photo : fallbackPhotoURL),
+              photo.isNotEmpty ? photo : fallbackPhotoURL),
         );
       },
     );
@@ -577,7 +580,6 @@ class _AuthorTile extends StatelessWidget {
   }
 }
 
-
 /// Glass-style info card
 class _InfoGlassCard extends StatelessWidget {
   final Widget child;
@@ -591,13 +593,16 @@ class _InfoGlassCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color.fromRGBO(255, 255, 255, 0.92),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: const Color.fromRGBO(0, 0, 0, 0.04), blurRadius: 12,
-        offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+              color: const Color.fromRGBO(0, 0, 0, 0.04), blurRadius: 12, offset: const Offset(0, 6))
+        ],
       ),
       child: child,
     );
   }
 }
+
 /// Reusable widget: rút gọn văn bản dài với nút "Xem thêm" / "Thu gọn"
 class ExpandableText extends StatefulWidget {
   final String text;
@@ -655,7 +660,9 @@ class _ExpandableTextState extends State<ExpandableText> {
           child: ConstrainedBox(
             constraints: _expanded
                 ? const BoxConstraints()
-                : BoxConstraints(maxHeight: widget.maxLines * (widget.style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 14) * 1.3),
+                : BoxConstraints(
+                    maxHeight:
+                        widget.maxLines * (widget.style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 14) * 1.3),
             child: Text(
               widget.text,
               style: widget.style,
