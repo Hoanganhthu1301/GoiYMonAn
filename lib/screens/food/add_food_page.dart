@@ -229,8 +229,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
                     child: Text(cat['name'] as String),
                   ))
               .toList(),
-
-
                 onChanged: (val) => setState(() => _selectedCategoryId = val),
                 validator: (v) => v == null ? 'Chọn danh mục món ăn' : null,
               ),

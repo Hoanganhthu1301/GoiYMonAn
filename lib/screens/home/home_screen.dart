@@ -24,7 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late AuthService _authService;
-  String _currentUserRole = 'guest';
+  String currentUserRole = 'guest';
 
   @override
   void initState() {
@@ -40,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUserRole() async {
     final role = await _authServiceGetRoleSafe();
-    if (mounted) setState(() => _currentUserRole = role);
+    if (mounted) setState(() => currentUserRole = role);
   }
 
   Future<String> _authServiceGetRoleSafe() async {
@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _macroItem(String label,
+  Widget macroItem(String label,
       {required int eaten, required int goal, required Color color}) {
     final theme = Theme.of(context);
     final labelColor = theme.textTheme.bodySmall?.color ?? Colors.black54;
@@ -146,7 +146,7 @@ Widget _macroProgressRow({
         child: LinearProgressIndicator(
           minHeight: 10,
           value: progress,
-          backgroundColor: color.withOpacity(0.18),
+          backgroundColor: color.withAlpha((0.18 * 255).round()),
           valueColor: AlwaysStoppedAnimation<Color>(color),
         ),
       ),
@@ -242,7 +242,7 @@ Widget _macroProgressRow({
     // pastel colors (theme-aware)
     final pastelPurple = isDark ? const Color.fromARGB(255, 53, 85, 212) : const Color.fromARGB(255, 121, 180, 248);
     final pastelOrange = isDark ? const Color.fromARGB(255, 212, 124, 56) : const Color.fromARGB(255, 248, 195, 131);
-    final pastelGreen = isDark ? const Color.fromARGB(255, 81, 227, 130) : const Color.fromARGB(255, 249, 140, 207);
+    final pastelGreen = isDark ? const Color.fromARGB(255, 81, 227, 130) : const Color.fromARGB(255, 140, 249, 174);
 
 
     // theme-aware colors
@@ -251,7 +251,7 @@ Widget _macroProgressRow({
     final softCardColor = isDark ? const Color(0xFF0F1720) : const Color.fromARGB(255, 212, 241, 222);
     final textPrimary = theme.textTheme.bodyLarge?.color ?? (isDark ? Colors.white70 : Colors.black87);
     final primaryColor = theme.colorScheme.primary;
-    final progressBg = isDark ? Color.fromRGBO(255, 255, 255, 0.06) : const Color.fromARGB(255, 4, 60, 40).withAlpha((0.2 * 255).round());
+    final progressBg = isDark ? Color.fromRGBO(255, 255, 255, 0.06) : const Color.fromARGB(255, 62, 244, 186).withAlpha((0.2 * 255).round());
     final progressColor = isDark ? primaryColor : Colors.green;
 
     return Scaffold(
@@ -462,7 +462,6 @@ Widget _macroProgressRow({
                                               ),
                                             ],
                                           );
-;
                                             },
                                           ),
                                         ],

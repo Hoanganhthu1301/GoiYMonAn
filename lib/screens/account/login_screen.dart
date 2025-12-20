@@ -1,7 +1,6 @@
 // lib/screens/account/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import 'register_screen.dart';

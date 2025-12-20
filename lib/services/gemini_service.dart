@@ -14,6 +14,9 @@ class GeminiService {
   // Singleton cho tiện dùng
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
+  String? _currentConversationId;
+  String _uid() => _auth.currentUser!.uid;
+
 
   GeminiService._internal() {
     print('🔥 GeminiService init với REST API');
@@ -26,7 +29,6 @@ class GeminiService {
       'https://generativelanguage.googleapis.com/v1beta/models'
       '?key=${AppConfig.geminiApiKey}',
     );
-
     try {
       final resp = await http.get(url, headers: {'Content-Type': 'application/json'});
       if (resp.statusCode == 200) {
@@ -58,6 +60,167 @@ class GeminiService {
       return [];
     }
   }
+
+Future<void> saveChat({
+  required String role,
+  required String text,
+}) async {
+  final user = _auth.currentUser;
+  if (user == null) return;
+
+  final cid = await getCurrentConversationId();
+
+  final convoRef = _db
+      .collection('chat_sessions')
+      .doc(user.uid)
+      .collection('conversations')
+      .doc(cid);
+
+  // 1️⃣ LƯU MESSAGE
+  await convoRef.collection('messages').add({
+    'role': role,
+    'text': text,
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
+  // 2️⃣ LẤY DATA CONVERSATION HIỆN TẠI
+  final snap = await convoRef.get();
+  final data = snap.data() ?? {};
+
+  // 3️⃣ CHỈ SET TITLE LẦN ĐẦU (USER MESSAGE ĐẦU TIÊN)
+  if (role == 'user' && (data['title'] == null || data['title'] == '')) {
+    await convoRef.set({
+      'title': _buildTitle(text),
+      'summary': text,
+      'createdAt': data['createdAt'] ?? FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  } 
+  // 4️⃣ CÁC TIN USER SAU → CHỈ UPDATE SUMMARY
+  else if (role == 'user') {
+    await convoRef.update({
+      'summary': text,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  } 
+  // 5️⃣ TIN AI → CHỈ UPDATE updatedAt
+  else {
+    await convoRef.update({
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+String _buildTitle(String text) {
+  final t = text.trim();
+  if (t.length <= 40) return t;
+  return '${t.substring(0, 40)}...';
+}
+
+Future<List<Map<String, dynamic>>> getChatHistory(
+  String conversationId,
+) async {
+  final uid = _auth.currentUser!.uid;
+
+  final snap = await _db
+      .collection('chat_sessions')
+      .doc(uid)
+      .collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .orderBy('createdAt')
+      .limit(12)
+      .get();
+
+  return snap.docs.map((d) {
+    final data = d.data();
+    return {
+      'role': data['role'] ?? 'user',
+      'text': data['text'] ?? '',
+    };
+  }).toList();
+}
+
+Stream<QuerySnapshot> streamMessages(String conversationId) {
+  final user = _auth.currentUser;
+  if (user == null) return const Stream.empty();
+
+  return _db
+      .collection('chat_sessions')
+      .doc(user.uid)
+      .collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .orderBy('createdAt')
+      .snapshots();
+}
+Stream<QuerySnapshot> streamConversations() {
+  final user = _auth.currentUser;
+  if (user == null) return const Stream.empty();
+
+  return _db
+      .collection('chat_sessions')
+      .doc(user.uid)
+      .collection('conversations')
+      .orderBy('updatedAt', descending: true)
+      .snapshots();
+}
+
+Future<String> startNewConversation() async {
+  final user = _auth.currentUser;
+  if (user == null) throw Exception('Not logged in');
+
+  await _db.collection('chat_sessions').doc(user.uid).set({
+    'userId': user.uid,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+
+  final ref = _db
+      .collection('chat_sessions')
+      .doc(user.uid)
+      .collection('conversations')
+      .doc();
+
+  _currentConversationId = ref.id;
+  return ref.id;
+}
+void resetCurrentConversation() {
+  _currentConversationId = null;
+}
+
+Future<String> getCurrentConversationId() async {
+  if (_currentConversationId != null) return _currentConversationId!;
+
+  final snap = await _db
+      .collection('chat_sessions')
+      .doc(_uid())
+      .collection('conversations')
+      .orderBy('updatedAt', descending: true)
+      .limit(1)
+      .get();
+
+  if (snap.docs.isEmpty) {
+    return await startNewConversation();
+  }
+
+  _currentConversationId = snap.docs.first.id;
+  return _currentConversationId!;
+}
+Future<void> deleteConversation(String cid) async {
+  final uid = _auth.currentUser!.uid;
+  final ref = _db
+      .collection('chat_sessions')
+      .doc(uid)
+      .collection('conversations')
+      .doc(cid);
+
+  final msgs = await ref.collection('messages').get();
+  for (final m in msgs.docs) {
+    await m.reference.delete();
+  }
+
+  await ref.delete();
+}
 
   /// Gọi Gemini API trực tiếp qua REST
   Future<String> _callGeminiAPI(String prompt) async {
@@ -181,6 +344,9 @@ class GeminiService {
   /// HÀM CHÍNH:
   /// Câu hỏi bất kỳ về món ăn / chế độ ăn / cân nặng → trả lời dựa trên data Firebase.
   Future<String> askNutrition(String question) async {
+    final cid = await getCurrentConversationId();
+    final history = await getChatHistory(cid);
+
     try {
       // 1. Lấy user hiện tại (nếu chưa login thì trả lời chung chung)
       final user = _auth.currentUser;
@@ -224,16 +390,26 @@ class GeminiService {
       // 4. Build prompt gửi cho Gemini
       final prompt = StringBuffer();
 
+      // SYSTEM PROMPT
       prompt.writeln(
         'Bạn là trợ lý dinh dưỡng của một ứng dụng tính calo & gợi ý món ăn.',
       );
       prompt.writeln(
-        'Nhiệm vụ: tư vấn chế độ ăn, món ăn, giảm/tăng cân dựa trên dữ liệu trong app.',
+        'Hãy nhớ ngữ cảnh hội thoại trước đó khi trả lời.',
       );
       prompt.writeln(
-        'Luôn trả lời bằng TIẾNG VIỆT, giọng thân thiện, dễ hiểu, không dùng từ quá chuyên môn.',
+        'Luôn trả lời bằng TIẾNG VIỆT, thân thiện, dễ hiểu.',
       );
 
+      // 🔥 LỊCH SỬ CHAT (CỰC QUAN TRỌNG)
+      prompt.writeln('\n--- LỊCH SỬ HỘI THOẠI ---');
+      for (final h in history) {
+        if (h['role'] == 'user') {
+          prompt.writeln('Người dùng: ${h['text']}');
+        } else {
+          prompt.writeln('AI: ${h['text']}');
+        }
+      }
       // THÔNG TIN USER
       prompt.writeln('\n--- THÔNG TIN NGƯỜI DÙNG (TỪ COLLECTION users) ---');
       if (userData != null) {
@@ -246,7 +422,6 @@ class GeminiService {
         final tdee = userData['tdee'] ?? userData['TDEE'] ?? '';
         final todayCalories =
             userData['todayCalories'] ?? userData['today_calo'] ?? '';
-
         prompt.writeln('Tên: $name');
         prompt.writeln('Giới tính: $gender');
         prompt.writeln('Tuổi: $age');
@@ -288,8 +463,9 @@ class GeminiService {
       // HƯỚNG DẪN TRẢ LỜI
       prompt.writeln('\n--- YÊU CẦU TRẢ LỜI ---');
       prompt.writeln(
-        '- CHỦY ẾU sử dụng dữ liệu từ app (danh sách món ăn, category, thông tin user) để trả lời.\n'
+        '- CHỦ YẾU sử dụng dữ liệu từ app (danh sách món ăn, category, thông tin user) để trả lời.\n'
         '- Nếu câu hỏi CÓ liên quan đến dữ liệu app, hãy ưu tiên gợi ý các món ăn / category có trong hệ thống.\n'
+        '- Nếu câu hỏi về cân nặng, BMI, hoặc tư vấn tập luyện, hãy trả lời dựa trên kiến thức chung, tính toán BMI nếu cần, gợi ý tập luyện phù hợp, vẫn dùng ngôn ngữ thân thiện, dễ hiểu.\n'
         '- Bạn CÓ THỂ bổ sung một ít kiến thức chung (ví dụ: lợi ích dinh dưỡng, cách tính calo) để giải thích thêm, nhưng không phải là trọng tâm.\n'
         '- Nếu câu hỏi KHÔNG thể trả lời dựa chủ yếu trên dữ liệu app, hãy nói: "Xin lỗi, mình chủ yếu tư vấn dựa trên dữ liệu trong hệ thống."\n'
         '- Trả lời bằng TIẾNG VIỆT, giọng thân thiện, dễ hiểu.\n',
@@ -301,7 +477,7 @@ class GeminiService {
       return 'Xin lỗi, AI đang gặp lỗi: ${e.toString()}\n\nBạn thử lại sau nha 🥲';
     }
   }
-
+  
   /// Chat đơn giản, không gắn Firebase (phòng khi cần)
   Future<String> simpleChat(String message) async {
     final prompt =

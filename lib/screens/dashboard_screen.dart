@@ -53,8 +53,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // User bình thường
           _pages = <Widget>[
             const HomeScreen(),           // Trang chủ
+            ProfileScreen(userId: currentUserId),
             FoodListScreen(),             // Món ăn
-            ProfileScreen(userId: currentUserId), // Cá nhân
+            
+            // ProfileScreen(userId: currentUserId), // Cá nhân
           ];
           _currentIndex = 0;
         }
@@ -125,13 +127,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: 'Trang chủ',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.restaurant_menu),
-                  label: 'Món ăn',
-                ),
-                BottomNavigationBarItem(
                   icon: Icon(Icons.person),
                   label: 'Cá nhân',
                 ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.restaurant_menu),
+                  label: 'Món ăn',
+                ),
+                // BottomNavigationBarItem(
+                //   icon: Icon(Icons.person),
+                //   label: 'Cá nhân',
+                // ),
               ],
       ),
     );

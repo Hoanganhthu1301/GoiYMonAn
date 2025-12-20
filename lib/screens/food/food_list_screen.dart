@@ -71,7 +71,7 @@ class _FoodListScreenState extends State<FoodListScreen> {
           .orderBy('createdAt', descending: false)
           .get();
       final cats = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         return {
           'name': data['name'] ?? '',
           'color': data['color'] ?? 0xFFAED581,
@@ -130,7 +130,10 @@ class _FoodListScreenState extends State<FoodListScreen> {
         ? _currentPage * _pageSize
         : filtered.length;
 
-    _displayFoods = filtered.sublist(0, endIndex);
+    _displayFoods = filtered.sublist(
+      startIndex, // dùng startIndex thay vì 0
+      endIndex,
+  );
   }
 
   void _loadMore() {
@@ -233,7 +236,7 @@ Widget _buildDietFilterButton(ThemeData theme) {
                 ChoiceChip(
                   label: const Text('Tất cả', style: TextStyle(fontSize: 12)),
                   selected: selectedDiet.isEmpty,
-                  selectedColor: theme.colorScheme.primary.withOpacity(0.4),
+                  selectedColor: theme.colorScheme.primary.withAlpha((0.4 * 255).toInt()),
                   backgroundColor: theme.cardColor,
                   onSelected: (_) {
                     setState(() {
@@ -249,7 +252,7 @@ Widget _buildDietFilterButton(ThemeData theme) {
                   return ChoiceChip(
                     label: Text(diet, style: const TextStyle(fontSize: 12)),
                     selected: isSelected,
-                    selectedColor: theme.colorScheme.primary.withOpacity(0.4),
+                    selectedColor: theme.colorScheme.primary.withAlpha((0.4 * 255).toInt()),
                     backgroundColor: theme.cardColor,
                     labelStyle: TextStyle(
                         color: isSelected ? Colors.white : theme.textTheme.bodyMedium?.color),
@@ -262,7 +265,7 @@ Widget _buildDietFilterButton(ThemeData theme) {
                       Navigator.pop(context);
                     },
                   );
-                }).toList(),
+                })
               ],
             ),
           ),
@@ -306,9 +309,10 @@ Widget _buildDietFilterButton(ThemeData theme) {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? color.withOpacity(0.3) : theme.cardColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withOpacity(0.3)),
+              color: isSelected ? color.withAlpha((0.3 * 255).round()) : theme.cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withAlpha((0.3 * 255).round())),
+
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -364,7 +368,7 @@ Widget _buildDietFilterButton(ThemeData theme) {
           color: imageUrl.isEmpty ? theme.cardColor : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.15),
+              color: Colors.grey.withAlpha(38),
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),

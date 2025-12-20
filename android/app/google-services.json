@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "655103036581-gbmqoj6b8cq723avfv68f0khjgd4kksn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.doan",
+            "certificate_hash": "66e3d4d1025d6c5afc42534f71159d9351edbb8e"
+          }
+        },
+        {
           "client_id": "655103036581-p6hqo5n2rqj8jputghpisac15an9aqjt.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/calorie_service.dart';
-import '../home/home_screen.dart';
 import '../dashboard_screen.dart'; // <-- thêm import Dashboard
 
 class OnboardingScreen extends StatefulWidget {
@@ -19,7 +18,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<_OnboardingPageData> _pages = const [
     _OnboardingPageData(
-      title: 'Chào mừng đến với CaloFit',
+      title: 'Chào mừng đến với Súp Lơ Ơi!',
       subtitle:
           'Ứng dụng tính calo & gợi ý món ăn giúp bạn ăn ngon mà vẫn giữ dáng.',
       icon: Icons.restaurant,
@@ -406,11 +405,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   double _activityFactor = 1.2;
   // internal calorieMode (kept mutable if you later want to allow editing)
-  String _calorieMode = 'maintain';
+  final String _calorieMode = 'maintain';
 
-  int? _bmr;
-  int? _tdee;
-  int? _dailyGoal;
+  int? bmr;
+  int? tdee;
+  int? dailyGoal;
 
   @override
   void dispose() {
@@ -572,9 +571,11 @@ Future<void> _finish() async {
           : 10 * weight + 6.25 * height - 5 * age - 161;
       final tdeeDouble = bmrDouble * _activityFactor;
       double goalDouble = tdeeDouble;
-      if (_calorieMode == 'lose') goalDouble = tdeeDouble - 500;
-      else if (_calorieMode == 'gain') goalDouble = tdeeDouble + 500;
-
+      if (_calorieMode == 'lose') {
+        goalDouble = tdeeDouble - 500;
+      } else if (_calorieMode == 'gain') {
+        goalDouble = tdeeDouble + 500;
+      }
       bmr = bmrDouble.round();
       tdee = tdeeDouble.round();
       dailyGoal = goalDouble.round().clamp(800, 6000);
@@ -582,12 +583,6 @@ Future<void> _finish() async {
       protein = ((dailyGoal * 0.25) / 4).round();
       carbs = ((dailyGoal * 0.50) / 4).round();
       fat = ((dailyGoal * 0.25) / 9).round();
-
-      setState(() {
-        _bmr = bmr;
-        _tdee = tdee;
-        _dailyGoal = dailyGoal;
-      });
     }
 
     final Map<String, dynamic> calorieGoalMap = {};

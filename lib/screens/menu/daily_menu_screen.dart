@@ -263,7 +263,6 @@ class _DailyMenuScreenState extends State<DailyMenuScreen> {
                 _buildMealCard(context, 'Khai vị', Icons.local_dining, menu['appetizer']),
                 const SizedBox(height: 16),
                 _buildMealCard(context, 'Tráng miệng', Icons.icecream, menu['dessert']),
-
                 const SizedBox(height: 20),
                 Center(
                   child: Text('Chúc bạn có một ngày đầy năng lượng và món ngon hợp khẩu vị!', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
